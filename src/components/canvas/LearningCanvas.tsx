@@ -7,7 +7,6 @@ import {
   Controls,
   ReactFlow,
   ReactFlowProvider,
-  useNodesInitialized,
   useReactFlow,
   useStore,
   type Node,
@@ -28,6 +27,7 @@ import {
   lessonBfsActivity,
   knownDistance,
   safeBfsTrace,
+  teachingViewport,
   type CanvasScene,
 } from "./scene-model";
 import { Conveyor, DeliveryMap, Parcel } from "./Illustrations";
@@ -51,12 +51,7 @@ type SceneData = Record<string, unknown> & {
 };
 type TeachingNode = Node<SceneData, "teaching">;
 const nodeTypes = { teaching: TeachingScene };
-const focusPadding = {
-  top: "90px",
-  bottom: "110px",
-  left: "45px",
-  right: "45px",
-} as const;
+
 
 export function LearningCanvas(props: LearningCanvasProps) {
   return (
@@ -171,32 +166,15 @@ function CanvasBoard(props: LearningCanvasProps) {
       teaching.openingQuestion,
     ],
   );
-  const { fitView, setViewport } = useReactFlow();
-  const ready = useNodesInitialized();
+  const { setViewport, viewportInitialized } = useReactFlow();
   const active = Math.max(
     0,
     Math.min(props.activeSceneIndex, scenes.length - 1),
   );
   useEffect(() => {
-    if (!ready || !scenes[active] || !width || !height) return;
-    if (mobile) {
-      const zoom = Math.min(0.72, (width - 24) / 620);
-      void setViewport(
-        {
-          x: 12 - active * 1540 * zoom,
-          y: 135 - (active % 2 ? 70 : 0) * zoom,
-          zoom,
-        },
-        { duration: 0 },
-      );
-    } else
-      void fitView({
-        nodes: [{ id: scenes[active].id }],
-        padding: focusPadding,
-        duration: 0,
-        maxZoom: 1.1,
-      });
-  }, [active, ready, scenes, fitView, setViewport, width, height, mobile]);
+    if (!viewportInitialized || !scenes[active] || !width || !height) return;
+    void setViewport(teachingViewport(active,width,height,mobile), {duration:0});
+  }, [active,viewportInitialized,scenes,setViewport,width,height,mobile]);
   const activeData = nodes[active]?.data;
   return (
     <div className={styles.canvas} aria-label="Interactive teaching canvas">
@@ -223,21 +201,7 @@ function CanvasBoard(props: LearningCanvasProps) {
         <Controls
           position="bottom-left"
           showInteractive={false}
-          onFitView={() => {
-            if (mobile) {
-              const zoom = Math.min(0.72, (width - 24) / 620);
-              void setViewport({
-                x: 12 - active * 1540 * zoom,
-                y: 135 - (active % 2 ? 70 : 0) * zoom,
-                zoom,
-              });
-            } else if (scenes[active])
-              void fitView({
-                nodes: [{ id: scenes[active].id }],
-                padding: focusPadding,
-                duration: 0,
-              });
-          }}
+          onFitView={() => {void setViewport(teachingViewport(active,width,height,mobile),{duration:0});}}
         />
       </ReactFlow>
       <div className={styles.canvasHint}>

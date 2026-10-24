@@ -154,3 +154,11 @@ export function knownDistance(
     ? frame.distances[node]
     : undefined;
 }
+
+
+/** Known stage bounds keep focus independent of ResizeObserver/handle measurements. */
+export function teachingViewport(index: number, width: number, height: number, mobile: boolean) {
+  const zoom = mobile ? Math.max(.18,Math.min(.72,(width-24)/620)) : Math.max(.18,Math.min((width-90)/1320,(height-200)/940,1.1));
+  return { x: (mobile?12:(width-1320*zoom)/2)-index*1540*zoom,
+    y: (mobile?135:90+(height-200-940*zoom)/2)-(index%2?70:0)*zoom, zoom };
+}
