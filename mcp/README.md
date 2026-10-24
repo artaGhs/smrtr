@@ -6,7 +6,7 @@ This first version requires a **local MCP host that can launch stdio servers** a
 
 ## Install and start the app
 
-Requires Node.js 20 or later and the repository dependencies:
+Requires Node.js 20.9 or later and the repository dependencies:
 
 ```sh
 cd /absolute/path/SMRTR
@@ -100,6 +100,6 @@ npm run test:mcp
 npm run typecheck
 ```
 
-The protocol tests launch the actual stdio process, initialize a legacy-compatible MCP connection, list tools/resources, read the schema and original notes, reject invalid/stale/cancelled requests, submit a valid lesson, and read the completed lesson from the real shared file store. They also run the manual CLI through the same flow. Temporary isolated stores are used; no model key or running Next server is needed.
+The protocol tests launch the actual stdio process, initialize a legacy-compatible MCP connection, list tools/resources, read the schema and original notes, reject invalid/stale/expired/cancelled requests, submit a valid lesson, and read the completed lesson from the real shared file store. They also verify that model-authored BFS keys are replaced with computed traversal and reachability answers. The stdio process is launched from a different working directory to check the absolute-path setup. They also run the manual CLI through the same flow. Temporary isolated stores are used; no model key or running Next server is needed.
 
 Implementation follows the official stable v2 SDK: [`@modelcontextprotocol/server`](https://ts.sdk.modelcontextprotocol.io/v2/get-started/first-server), [`serveStdio`](https://ts.sdk.modelcontextprotocol.io/v2/serving/stdio), [resources](https://ts.sdk.modelcontextprotocol.io/v2/servers/resources.html), and [legacy client support](https://ts.sdk.modelcontextprotocol.io/v2/serving/legacy-clients). The SDK supports older initializing clients through the same server factory; each host must still support the local stdio transport.

@@ -30,7 +30,11 @@ export async function getLessonRequest(id: string) {
     );
   }
   if (Date.parse(request.expiresAt) <= Date.now()) {
-    throw new GenerationError("CHAT_REQUEST_STALE", "This lesson request expired. Create a new request from your notes.", 410);
+    throw new GenerationError(
+      "CHAT_REQUEST_STALE",
+      "This lesson request expired. Create a new request from your notes.",
+      410,
+    );
   }
   return {
     ...getChatGenerationInstructions(request),

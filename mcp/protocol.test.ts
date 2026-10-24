@@ -36,7 +36,7 @@ class ProtocolClient {
       process.execPath,
       [tsx, resolve(root, "mcp/server.ts")],
       {
-        cwd: root,
+        cwd: directory,
         env: { ...process.env, SMRTR_BRIDGE_DIR: directory },
         stdio: "pipe",
       },
@@ -229,12 +229,15 @@ test(
         undefined,
         "list only returns summaries",
       );
-      const full = data(
-        await client.call("get_lesson_request", { id: request.id }),
-      );
+      const fullResult = await client.call("get_lesson_request", {
+        id: request.id,
+      });
+      assert.notEqual(fullResult.isError, true, JSON.stringify(fullResult));
+      const full = data(fullResult);
       assert.equal(full.request.revision, request.revision);
       assert.match(full.materialTrust, /untrusted/);
-      assert.ok(JSON.stringify(full).includes(notes));
+      assert.equal(full.untrustedInput.text, notes);
+      assert.equal(full.requiredMetadata.revision, request.revision);
       assert.ok(full.lessonSchema.properties.concepts);
       const resources = await client.request("resources/list");
       assert.equal(resources.result.resources[0].uri, "smrtr://schemas/lesson");
@@ -264,6 +267,7 @@ test(
       const saved = await getChatRequest(request.id, { directory });
       assert.equal(saved.state, "completed");
       assert.equal(saved.lesson!.mode, "generated");
+      assert.equal(saved.lesson!.origin, "chat");
       assert.equal(saved.lesson!.sources[0].text, notes);
       assert.equal(saved.lesson!.revision, request.revision);
       assert.notEqual(saved.lesson!.id, "chat-authored-id");
@@ -286,7 +290,7 @@ test(
 );
 
 test(
-  "stdio tools reject stale, cancelled, malformed and unknown requests without writes",
+  "stdio tools reject stale, expired, cancelled, malformed and unknown requests without writes",
   { timeout: 30000 },
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "smrtr-mcp-rejection-"));
@@ -314,6 +318,33 @@ test(
       });
       assert.equal(missing.isError, true);
       assert.equal(data(missing).code, "CHAT_REQUEST_NOT_FOUND");
+      const expired = await createChatRequest(
+        { text: notes },
+        {
+          directory,
+          now: () => new Date(Date.now() - 25 * 60 * 60 * 1000),
+        },
+      );
+      assert.equal(
+        data(await client.call("list_lesson_requests")).requests.length,
+        1,
+      );
+      const expiredGet = await client.call("get_lesson_request", {
+        id: expired.id,
+      });
+      assert.equal(expiredGet.isError, true);
+      assert.equal(data(expiredGet).code, "CHAT_REQUEST_STALE");
+      const expiredSubmit = await client.call("submit_lesson", {
+        id: expired.id,
+        revision: expired.revision,
+        lesson: candidate(),
+      });
+      assert.equal(expiredSubmit.isError, true);
+      assert.equal(data(expiredSubmit).code, "CHAT_REQUEST_STALE");
+      assert.equal(
+        (await getChatRequest(expired.id, { directory })).state,
+        "pending",
+      );
       await cancelChatRequest(request.id, { directory });
       const cancelled = await client.call("submit_lesson", {
         id: request.id,
@@ -395,6 +426,69 @@ test(
       assert.equal(bad.stdout, "");
       assert.equal(JSON.parse(bad.stderr).code, "INVALID_ARGUMENTS");
     } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "MCP submission replaces model-authored BFS answer keys using the actual graph",
+  { timeout: 30000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "smrtr-mcp-bfs-"));
+    const text =
+      "Teach BFS breadth-first search with alphabetical neighbors, a FIFO queue, and visited on enqueue.";
+    const request = await createChatRequest({ text }, { directory });
+    const lesson = candidate();
+    lesson.concepts[0] = {
+      ...lesson.concepts[0],
+      title: "Breadth-first search",
+      summary: "Explore reachable nodes in layers.",
+      objective: "Trace the FIFO queue to find fewest-edge paths.",
+    };
+    lesson.modules[0].activity = {
+      kind: "bfs",
+      nodes: ["S", "A", "B", "C", "T", "U"],
+      directed: true,
+      start: "S",
+      neighborOrder: "alphabetical",
+      visitedOn: "enqueue",
+      edges: [
+        { source: "S", target: "B" },
+        { source: "S", target: "A" },
+        { source: "A", target: "C" },
+        { source: "B", target: "T" },
+        { source: "C", target: "T" },
+      ],
+    };
+    lesson.modules[0].questions[0].correctOptionIds = ["last"];
+    const client = new ProtocolClient(directory);
+    try {
+      await client.initialize();
+      const submitted = await client.call("submit_lesson", {
+        id: request.id,
+        revision: request.revision,
+        lesson,
+      });
+      assert.notEqual(submitted.isError, true, JSON.stringify(submitted));
+      const saved = (await getChatRequest(request.id, { directory })).lesson!;
+      const traversal = saved.modules[0].questions[0];
+      assert.equal(
+        traversal.options.find((option) =>
+          traversal.correctOptionIds.includes(option.id),
+        )!.text,
+        "S, A, B, C, T",
+      );
+      assert.equal(
+        saved.finalQuestions[0].options.find((option) =>
+          saved.finalQuestions[0].correctOptionIds.includes(option.id),
+        )!.text,
+        "Unreachable from the start",
+      );
+      assert.equal(saved.sources[0].text, text);
+      assert.equal(saved.origin, "chat");
+    } finally {
+      await client.close();
       await rm(directory, { recursive: true, force: true });
     }
   },
