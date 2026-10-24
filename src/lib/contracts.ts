@@ -313,6 +313,7 @@ export type LearningCanvasProps = {
 };
 
 export type PageLocation = {
+  routeLevel?: ConfidenceLevel;
   pageId: string;
   mainPageId: string;
   sceneIndex: number;

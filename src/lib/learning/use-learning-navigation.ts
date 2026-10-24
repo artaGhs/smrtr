@@ -21,7 +21,7 @@ import {
 export function useLearningNavigation(lesson: Lesson): LearningNavigationProps {
   const normalized = useMemo(() => normalizeLearningDesign(lesson), [lesson]);
   const { design, provenance } = normalized;
-  const route = useMemo(
+  const baseRoute = useMemo(
     () => coreRoute(design, lesson.learnerProfile ?? DEFAULT_LEARNER_PROFILE),
     [design, lesson.learnerProfile],
   );
@@ -31,13 +31,22 @@ export function useLearningNavigation(lesson: Lesson): LearningNavigationProps {
     state: initialNavigation(
       lesson,
       design,
-      route[0]?.id ?? design.pages[0].id,
+      baseRoute[0]?.id ?? design.pages[0].id,
     ),
   }));
   const state =
     saved.key === key
       ? saved.state
-      : initialNavigation(lesson, design, route[0]?.id ?? design.pages[0].id);
+      : initialNavigation(
+          lesson,
+          design,
+          baseRoute[0]?.id ?? design.pages[0].id,
+        );
+  const route = coreRoute(design, {
+    ...(lesson.learnerProfile ?? DEFAULT_LEARNER_PROFILE),
+    overall:
+      state.location.routeLevel ?? lesson.learnerProfile?.overall ?? "new",
+  });
   const update = (reduce: (current: typeof state) => typeof state) =>
     setSaved((previous) => ({
       key,
@@ -84,9 +93,22 @@ export function useLearningNavigation(lesson: Lesson): LearningNavigationProps {
         location: { ...current.location, scrollTop },
       })),
     onStartSimpler: () =>
-      update((current) =>
-        openLearningPage(current, lesson, design, design.routes.new[0]),
-      ),
+      update((current) => {
+        const next = openLearningPage(
+          current,
+          lesson,
+          design,
+          design.routes.new[0],
+        );
+        return {
+          ...next,
+          location: {
+            ...next.location,
+            mainPageId: design.routes.new[0],
+            routeLevel: "new",
+          },
+        };
+      }),
     onSimulationChange: (activityId, value) =>
       update((current) => setLearningSimulation(current, activityId, value)),
   };
