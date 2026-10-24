@@ -22,7 +22,13 @@ export function HierarchyLesson({ session, learning, onOpenConcept, onOpenSource
   const next = learning.route[nextIndex];
   const supports = design.pages.filter((item) => item.kind === "support" && item.parentId === page.id);
   const scrollTop = () => readingRef.current?.scrollTop ?? learning.location.scrollTop;
-  function openPage(pageId: string) { setRouteOpen(false); learning.onOpenPage(pageId, scrollTop()); }
+  function openPage(pageId: string, returningToAncestor = false) {
+    setRouteOpen(false);
+    const target = design.pages.find((item) => item.id === pageId);
+    const routeIndex = learning.route.findIndex((item) => item.id === pageId);
+    if (!returningToAncestor && target?.kind !== "support" && routeIndex >= 0) learning.onGoToCore(routeIndex);
+    else learning.onOpenPage(pageId, scrollTop());
+  }
   useEffect(() => {
     readingRef.current?.scrollTo({ top: learning.location.scrollTop });
     readingRef.current?.focus({ preventScroll: true });
@@ -35,7 +41,7 @@ export function HierarchyLesson({ session, learning, onOpenConcept, onOpenSource
   return <>
     <div className={`hierarchy-page ${isSupport ? "support-page" : ""}`}>
       <article className="hierarchy-reading" ref={readingRef} tabIndex={-1} onScroll={(event) => learning.onScroll(event.currentTarget.scrollTop)} aria-labelledby="learning-page-title">
-        <nav className="page-breadcrumbs" aria-label="Lesson breadcrumb">{learning.breadcrumbs.map((item, index) => <Fragment key={item.id}>{index > 0 && <span aria-hidden="true">/</span>}{item.id === page.id ? <span aria-current="page">{item.title}</span> : <button onClick={() => openPage(item.id)}>{item.kind === "overview" ? "Overview" : item.title}</button>}</Fragment>)}</nav>
+        <nav className="page-breadcrumbs" aria-label="Lesson breadcrumb">{learning.breadcrumbs.map((item, index) => <Fragment key={item.id}>{index > 0 && <span aria-hidden="true">/</span>}{item.id === page.id ? <span aria-current="page">{item.title}</span> : <button onClick={() => openPage(item.id, true)}>{item.kind === "overview" ? "Overview" : item.title}</button>}</Fragment>)}</nav>
         {learning.canGoBack && <button className="context-back" onClick={learning.onBack}><ArrowLeft size={12} />Back to where you were</button>}
         <div className="page-kind"><span>{isSupport ? "OPTIONAL SUPPORT" : isOverview ? "THE BIG PICTURE" : page.kind === "transfer" ? "TRY A NEW SITUATION" : `CORE PAGE ${Math.max(position, 0) + 1} OF ${corePages.length}`}</span>{learning.provenance === "legacy" && <span className="legacy-design-label">Adapted saved lesson</span>}</div>
         <h1 id="learning-page-title">{page.question || page.title}</h1>
