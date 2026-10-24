@@ -1,258 +1,150 @@
 "use client";
-import { useMemo } from "react";
+
+import { useRef, useState } from "react";
 import {
-  ReactFlow,
-  Background,
-  Controls,
-  MarkerType,
-  type Node,
-  type Edge,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import {
-  ArrowUpRight,
-  ArrowRight,
-  BookOpen,
-  Compass,
-  Layers,
-  Sparkles,
-  X,
+  ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, Check, Compass,
+  FileText, Focus, Layers, LoaderCircle, RotateCcw, Sparkles, X,
 } from "lucide-react";
-import type { StudyWorkspaceProps } from "@/lib/contracts";
+import type { Question, StudyWorkspaceProps } from "@/lib/contracts";
 import { ActivityView } from "../activities/ActivityView";
 import { QuestionView } from "../activities/QuestionView";
+import { ConceptMap } from "./ConceptMap";
+import { SourcePassages } from "./SourcePassages";
+
+type DetailView = "learn" | "sources" | "practice";
+
 export function StudyWorkspace(props: StudyWorkspaceProps) {
-  const { lesson, selectedConceptId, onSelectConcept } = props;
-  const concept =
-    lesson.concepts.find((c) => c.id === selectedConceptId) ??
-    lesson.concepts[0];
-  const module = lesson.modules.find((m) => m.conceptId === concept.id);
-  const selectedIndex = lesson.path.indexOf(concept.id);
-  const nodes: Node[] = useMemo(
-    () =>
-      lesson.concepts.map((c, i) => ({
-        id: c.id,
-        position: {
-          x: (i % 3) * 230 + 45,
-          y: Math.floor(i / 3) * 180 + 70 + (i % 2) * 50,
-        },
-        data: {
-          label: (
-            <div>
-              <span className="node-index">
-                {String(i + 1).padStart(2, "0")} / CONCEPT
-              </span>
-              <strong>{c.title}</strong>
-              <span>{c.summary}</span>
-            </div>
-          ),
-        },
-        className:
-          c.id === selectedConceptId ? "concept-node selected" : "concept-node",
-        style: { width: 205 },
-      })),
-    [lesson, selectedConceptId],
-  );
-  const edges: Edge[] = lesson.relations.map((r) => ({
-    id: r.id,
-    source: r.source,
-    target: r.target,
-    label: r.type,
-    animated: r.target === selectedConceptId,
-    style: {
-      stroke: r.type === "prerequisite" ? "#7d976e" : "#c8c7bd",
-      strokeWidth: 1.5,
-    },
-    markerEnd: { type: MarkerType.ArrowClosed, color: "#7d976e" },
-  }));
+  return <WorkspaceContent key={`${props.lesson.id}:${props.lesson.revision}`} {...props} />;
+}
+
+function WorkspaceContent(props: StudyWorkspaceProps) {
+  const { lesson, selectedConceptId } = props;
+  const [view, setView] = useState<DetailView>("learn");
+  const [overviewVersion, setOverviewVersion] = useState(0);
+  const mapRef = useRef<HTMLElement>(null);
+  const detailRef = useRef<HTMLElement>(null);
+  const concept = lesson.concepts.find((item) => item.id === selectedConceptId) ?? lesson.concepts[0];
+  const module = lesson.modules.find((item) => item.conceptId === concept.id);
+  const path = lesson.path.filter((id) => lesson.concepts.some((item) => item.id === id));
+  const pathIndex = path.indexOf(concept.id);
+  const currentAttempts = props.attempts.filter((attempt) => attempt.lessonId === lesson.id && attempt.revision === lesson.revision);
+  const latestAttempts = new Map(currentAttempts.map((attempt) => [attempt.questionId, attempt]));
+  const practiced = new Set(currentAttempts.flatMap((attempt) => attempt.conceptIds));
+  const needsReview = new Set([...latestAttempts.values()].filter((attempt) => !attempt.correct).flatMap((attempt) => attempt.conceptIds));
+  const related = lesson.relations.filter((relation) => relation.source === concept.id || relation.target === concept.id);
+  const generating = props.status === "generating";
+  const inputLength = props.input.trim().length;
+
+  function selectConcept(id: string, focusDetail = false) {
+    props.onSelectConcept(id);
+    setView("learn");
+    if (focusDetail) detailRef.current?.focus({ preventScroll: true });
+  }
+
+  function overview() {
+    setOverviewVersion((value) => value + 1);
+    mapRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    mapRef.current?.focus({ preventScroll: true });
+  }
+
+  function showView(next: DetailView) {
+    setView(next);
+    detailRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+
+  function reviewLinks(question: Question) {
+    if (latestAttempts.get(question.id)?.correct !== false) return null;
+    return <div className="review-links"><span>Worth another look:</span>{question.conceptIds.map((id) => {
+      const target = lesson.concepts.find((item) => item.id === id);
+      return target ? <button key={id} onClick={() => selectConcept(id, true)}><RotateCcw size={12} />{target.title}</button> : null;
+    })}</div>;
+  }
+
   return (
     <main className="app-shell">
-      <aside className="rail">
-        <a className="brand" href="/">
-          s<span>↗</span>
-        </a>
-        <Compass size={21} />
-        <BookOpen size={20} />
-        <Layers size={20} />
-        <div className="rail-bottom">a.</div>
+      <a className="skip-link" href="#study-input">Skip to your notes</a>
+      <aside className="rail" aria-label="Workspace navigation">
+        <a className="brand" href="/" aria-label="SMRTR home">s<span>↗</span></a>
+        <button onClick={overview} aria-label="Map overview" title="Map overview"><Compass size={21} /></button>
+        <button onClick={() => showView("learn")} aria-label="Learn selected concept" title="Learn"><BookOpen size={20} /></button>
+        <button onClick={() => showView("practice")} aria-label="Open final practice" title="Final practice"><Layers size={20} /></button>
+        <span className="rail-bottom" aria-hidden="true">↗</span>
       </aside>
       <div className="workspace">
         <header className="topbar">
-          <a href="/" className="wordmark">
-            SMRTR<span>STUDY, CONNECTED.</span>
-          </a>
-          <div className="top-status">
-            <span className="status-dot" /> Your curiosity, mapped{" "}
-            <span className="avatar">A</span>
-          </div>
+          <a href="/" className="wordmark">SMRTR<span>STUDY, CONNECTED.</span></a>
+          <div className="top-status"><span className="status-dot" />A workspace for your next aha.<span className="prototype">EARLY PREVIEW <ArrowUpRight size={13} /></span></div>
         </header>
         <div className="heading">
-          <div>
-            <div className="eyebrow">
-              YOUR LEARNING ATLAS <span>/</span> 001
-            </div>
-            <h1>
-              A little more <em>connected.</em>
-            </h1>
-            <p>Turn what you’re learning into something you can see.</p>
-          </div>
-          <span className="prototype">
-            HACKATHON PREVIEW <ArrowUpRight size={14} />
-          </span>
+          <div><div className="eyebrow">YOUR LEARNING ATLAS</div><h1>A little more <em>connected.</em></h1><p>Bring your notes. See the ideas. Put them into practice.</p></div>
+          <div className="workspace-stat"><strong>{lesson.concepts.length.toString().padStart(2, "0")}</strong><span>ideas to explore</span></div>
         </div>
-        <section className="study-grid">
+
+        <section className="study-grid" aria-label="Study workspace">
           <div className="map-column">
-            <section className="input-card">
-              <div className="section-label">
-                <span>
-                  <Sparkles size={15} /> Start with a spark
-                </span>
-                <span>01</span>
-              </div>
-              <label htmlFor="study-input">
-                A topic, your notes, that tricky lecture.
-              </label>
-              <textarea
-                id="study-input"
-                value={props.input}
-                onChange={(e) => props.onInputChange(e.target.value)}
-                placeholder="What would you like to understand?"
-              />
+            <section className="input-card" aria-labelledby="input-heading" aria-busy={generating}>
+              <div className="section-label"><span id="input-heading"><Sparkles size={15} />Start with a spark</span><button className="text-button" onClick={props.onLoadSample}>Explore sample <ArrowUpRight size={12} /></button></div>
+              <label htmlFor="study-input">A topic, your notes, that tricky lecture.</label>
+              <textarea id="study-input" value={props.input} maxLength={40000} onChange={(event) => props.onInputChange(event.target.value)} placeholder="Paste your notes or tell us what you want to understand…" aria-describedby="input-help" />
               <div className="input-footer">
-                <span>
-                  {props.input.length.toLocaleString()} characters · Make it
-                  yours
-                </span>
-                {props.status === "generating" ? (
-                  <button onClick={props.onCancel}>
-                    <X size={15} /> Cancel
-                  </button>
-                ) : (
-                  <button
-                    disabled={props.input.trim().length < 10}
-                    onClick={props.onGenerate}
-                  >
-                    Build my map <ArrowRight size={16} />
-                  </button>
-                )}
+                <span id="input-help">{props.input.length.toLocaleString()} / 40,000 characters{inputLength < 10 ? " · Add at least 10 characters" : " · Ready to connect"}</span>
+                {generating ? <button className="primary-button" onClick={props.onCancel}><X size={15} />Cancel generation</button> : <button className="primary-button" disabled={inputLength < 10 || inputLength > 40000} onClick={props.onGenerate}>Build my map <ArrowRight size={16} /></button>}
               </div>
-              {props.status === "generating" && (
-                <p role="status">Connecting the ideas in your notes…</p>
-              )}
-              {props.error && (
-                <p className="error" role="alert">
-                  {props.error}
-                </p>
-              )}
+              {generating && <div className="generation-progress" role="status"><LoaderCircle className="spin" size={17} /><div><strong>Building a map from your notes…</strong><span>Connecting concepts, explanations, and practice. You can keep exploring below.</span></div><div className="indeterminate-track" /></div>}
+              {props.error && <div className="error" role="alert"><strong>Your new map couldn’t be created.</strong><p>{props.error}</p><span>{lesson.mode === "sample" ? "The labeled sample is still available below." : "Your previous lesson is still available below."} Your notes are saved in the box above.</span></div>}
             </section>
-            <section className="map-card">
-              <div className="map-heading">
-                <div>
-                  <span className="eyebrow">THE BIG PICTURE</span>
-                  <h2>{lesson.title}</h2>
-                </div>
-                <span className="sample-badge">
-                  {lesson.mode === "sample"
-                    ? "SAMPLE LESSON"
-                    : "FROM YOUR NOTES"}
-                </span>
-              </div>
-              <div className="flow-map">
-                <ReactFlow
-                  nodes={nodes}
-                  edges={edges}
-                  onNodeClick={(_, node) => onSelectConcept(node.id)}
-                  fitView
-                  minZoom={0.4}
-                  maxZoom={1.5}
-                  nodesDraggable={false}
-                >
-                  <Background gap={22} size={1} color="#d5d7cc" />
-                  <Controls showInteractive={false} />
-                </ReactFlow>
-              </div>
-              <div className="map-footer">
-                <span>
-                  <i /> Prerequisite
-                </span>
-                <span>
-                  <i /> Related idea
-                </span>
-                <span>{lesson.concepts.length} connected concepts</span>
-              </div>
+
+            <section className="map-card" ref={mapRef} tabIndex={-1} aria-labelledby="map-heading">
+              <div className="map-heading"><div><span className="eyebrow">THE BIG PICTURE</span><h2 id="map-heading">{lesson.title}</h2></div><span className={`sample-badge ${lesson.mode === "generated" ? "generated-badge" : ""}`}>{lesson.mode === "sample" ? "SAMPLE LESSON" : "FROM YOUR NOTES"}</span></div>
+              <p className="map-summary">{lesson.summary}</p>
+              {lesson.mode === "sample" && <p className="sample-note">A prepared example to explore. Build a new map above to use your own notes.</p>}
+              <ConceptMap lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id)} practiced={practiced} needsReview={needsReview} overviewVersion={overviewVersion} />
+              <div className="map-footer"><span><i className="legend-prerequisite" />Prerequisite → next idea</span><span><i className="legend-related" />Related</span>{lesson.relations.some((relation) => relation.type === "contrast") && <span><i className="legend-contrast" />Contrast</span>}{lesson.relations.some((relation) => relation.type === "example") && <span><i className="legend-example" />Example →</span>}<button onClick={overview}><Focus size={12} />Fit map</button></div>
             </section>
-            <div className="path-bar">
-              <Compass size={18} />
-              <span>YOUR GUIDED PATH</span>
-              {lesson.path.map((id, i) => (
-                <button
-                  key={id}
-                  className={id === concept.id ? "active" : ""}
-                  onClick={() => onSelectConcept(id)}
-                  aria-label={`Go to ${lesson.concepts.find((c) => c.id === id)?.title}`}
-                >
-                  {String(i + 1).padStart(2, "0")}
-                </button>
-              ))}
-            </div>
+
+            <section className="path-card" aria-labelledby="path-heading">
+              <div className="path-heading"><span id="path-heading"><Compass size={16} />YOUR GUIDED PATH</span><span>{practiced.size} / {lesson.concepts.length} practiced</span></div>
+              <div className="path-steps">{path.map((id, index) => {
+                const target = lesson.concepts.find((item) => item.id === id)!;
+                return <button key={id} className={`path-step ${id === concept.id && view === "learn" ? "active" : ""}`} onClick={() => selectConcept(id)} aria-current={id === concept.id && view === "learn" ? "step" : undefined}><span className="path-number">{practiced.has(id) ? <Check size={13} /> : String(index + 1).padStart(2, "0")}</span><span>{target.title}{needsReview.has(id) && <small>Suggested review</small>}</span><ArrowRight size={13} /></button>;
+              })}<button className={`path-step path-practice ${view === "practice" ? "active" : ""}`} onClick={() => showView("practice")}><span className="path-number"><Layers size={13} /></span><span>Bring it together<small>Final practice</small></span><ArrowRight size={13} /></button></div>
+              <p>Follow the path, or jump into any idea on the map.</p>
+            </section>
           </div>
-          <aside className="lesson-card">
-            <div className="lesson-topline">
-              <span className="eyebrow">A CLOSER LOOK</span>
-              <span>
-                {String(selectedIndex + 1).padStart(2, "0")} /{" "}
-                {String(lesson.concepts.length).padStart(2, "0")}
-              </span>
-            </div>
-            <div className="lesson-content">
-              <div className="concept-icon">↗</div>
-              <h2>{concept.title}</h2>
-              <p className="concept-summary">{concept.summary}</p>
-              <div className="lesson-divider" />
-              <span className="eyebrow">THE IDEA</span>
-              <p>{module?.explanation ?? "This concept is being prepared."}</p>
-              {module && (
-                <>
-                  <div className="example">
-                    <span className="eyebrow">MAKE IT CONCRETE</span>
-                    <p>{module.example}</p>
-                  </div>
-                  <ActivityView
-                    key={`${lesson.revision}-${module.id}`}
-                    activity={module.activity}
-                    conceptId={concept.id}
-                  />
-                  {module.questions.map((q) => (
-                    <QuestionView
-                      key={`${lesson.revision}-${q.id}`}
-                      question={q}
-                      onAnswer={(answer, evaluation) =>
-                        props.onAnswer(q, answer, evaluation)
-                      }
-                    />
-                  ))}
-                </>
-              )}
-            </div>
-            <footer className="lesson-footer">
-              <span>Small steps. Deeper understanding.</span>
-              <button
-                onClick={() =>
-                  onSelectConcept(
-                    lesson.path[(selectedIndex + 1) % lesson.path.length],
-                  )
-                }
-              >
-                Next concept <ArrowRight size={15} />
-              </button>
-            </footer>
+
+          <aside className="lesson-card" ref={detailRef} tabIndex={-1} aria-label="Learning detail">
+            <nav className="detail-tabs" aria-label="Learning views">{([['learn', 'Learn', BookOpen], ['sources', 'Sources', FileText], ['practice', 'Final practice', Layers]] as const).map(([id, label, Icon]) => <button key={id} onClick={() => setView(id)} className={view === id ? "active" : ""} aria-pressed={view === id}><Icon size={14} />{label}</button>)}</nav>
+            {view === "learn" && <>
+              <div className="lesson-topline"><button onClick={overview}><ArrowLeft size={12} />Map overview</button><span>{pathIndex >= 0 ? `CONCEPT ${String(pathIndex + 1).padStart(2, "0")} / ${String(path.length).padStart(2, "0")}` : "EXPLORE A CONNECTION"}</span></div>
+              <div className="lesson-content" key={concept.id}>
+                <div className="concept-title-row"><div className="concept-icon" aria-hidden="true">↗</div>{needsReview.has(concept.id) && <span className="review-badge">Suggested review</span>}</div>
+                <h2>{concept.title}</h2><p className="concept-summary">{concept.summary}</p>
+                <div className="learning-objective"><span className="eyebrow">YOUR TAKEAWAY</span><p>{concept.objective}</p></div>
+                <div className="lesson-divider" /><span className="eyebrow">THE IDEA</span>
+                <p className="explanation">{module?.explanation ?? concept.summary}</p>
+                {module && <>
+                  <div className="example"><span className="eyebrow">WORKED EXAMPLE</span><p>{module.example}</p><span className="example-caption">Lesson illustration · see Sources for original passages</span></div>
+                  <ActivityView key={`${lesson.id}:${lesson.revision}:${module.id}`} activity={module.activity} conceptId={concept.id} />
+                  {module.questions.map((question) => <div key={`${lesson.revision}:${question.id}`}><QuestionView question={question} onAnswer={(answer, evaluation) => props.onAnswer(question, answer, evaluation)} />{reviewLinks(question)}</div>)}
+                </>}
+                <div className="concept-connections"><span className="eyebrow">CONNECT THE DOTS</span>{related.length ? related.map((relation) => {
+                  const otherId = relation.source === concept.id ? relation.target : relation.source;
+                  const other = lesson.concepts.find((item) => item.id === otherId);
+                  const label = relation.type === "prerequisite" ? relation.target === concept.id ? "Builds on" : "Prepares you for" : relation.type === "contrast" ? "Compare with" : relation.type === "example" ? relation.target === concept.id ? "Example of" : "See an example" : "Related idea";
+                  return other ? <button key={relation.id} onClick={() => selectConcept(otherId, true)}><span>{label}</span><strong>{other.title}</strong><ArrowUpRight size={14} /></button> : null;
+                }) : <p>Use the guided path to explore the next idea.</p>}</div>
+                <button className="source-link" onClick={() => setView("sources")}><FileText size={14} />Read the supporting source passages<ArrowUpRight size={14} /></button>
+              </div>
+              <footer className="lesson-footer"><button className="secondary-button" disabled={pathIndex <= 0} onClick={() => selectConcept(path[pathIndex - 1], true)}><ArrowLeft size={14} />Previous</button><button className="primary-button" onClick={() => pathIndex >= 0 && pathIndex < path.length - 1 ? selectConcept(path[pathIndex + 1], true) : setView("practice")}>{pathIndex >= 0 && pathIndex < path.length - 1 ? "Next concept" : "Final practice"}<ArrowRight size={14} /></button></footer>
+            </>}
+            {view === "sources" && <SourcePassages lesson={lesson} concept={concept} sourceIds={[...new Set([...concept.sourceIds, ...(module?.sourceIds ?? [])])]} onSelectConcept={(id) => selectConcept(id, true)} />}
+            {view === "practice" && <div className="lesson-content practice-content"><span className="eyebrow">BRING IT TOGETHER</span><h2>Make it stick.</h2><p>Connect the ideas in this lesson. Each question links back to the concepts it uses.</p><div className="practice-status"><Layers size={16} /><span>{lesson.finalQuestions.filter((question) => latestAttempts.has(question.id)).length} of {lesson.finalQuestions.length} questions checked</span></div>{lesson.finalQuestions.length ? lesson.finalQuestions.map((question, index) => <div className="final-question" key={`${lesson.revision}:${question.id}`}><div className="final-question-header"><span>QUESTION {String(index + 1).padStart(2, "0")}</span><div>{question.conceptIds.map((id) => {
+              const target = lesson.concepts.find((item) => item.id === id);
+              return target ? <button key={id} onClick={() => selectConcept(id, true)}>{target.title}<ArrowUpRight size={11} /></button> : null;
+            })}</div></div><QuestionView question={question} onAnswer={(answer, evaluation) => props.onAnswer(question, answer, evaluation)} />{reviewLinks(question)}</div>) : <p className="empty-state">This lesson has no final questions. Try the checks inside each concept.</p>}<p className="practice-note">A check is a snapshot, not a mastery score. Follow a review link whenever something feels unclear.</p><button className="secondary-button" onClick={overview}><Compass size={14} />Return to the map</button></div>}
           </aside>
         </section>
-        <footer className="page-footer">
-          <span>Follow the connections. Find your understanding.</span>
-          <button onClick={props.onLoadSample}>Explore sample lesson ↗</button>
-          <span>BUILT FOR YOUR NEXT AHA.</span>
-        </footer>
+        <footer className="page-footer"><span>Follow the connections. Find your understanding.</span><span>Made for curious minds. ↗</span></footer>
       </div>
     </main>
   );
