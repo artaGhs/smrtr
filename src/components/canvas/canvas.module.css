@@ -1,0 +1,658 @@
+.canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  background: #fbfcfe;
+  color: #252b38;
+  font-family: inherit;
+  --canvas-blue: #3865df;
+  --canvas-muted: #758095;
+  --canvas-line: #dfe5ef;
+  overflow: hidden;
+}
+.canvas :global(.react-flow__node-teaching) {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+.canvas :global(.react-flow__controls) {
+  box-shadow: 0 3px 15px #17233d0b;
+  border: 1px solid #e3e7ee;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.canvas :global(.react-flow__controls-button) {
+  background: #fff;
+  border-color: #edf0f4;
+  color: #65738a;
+  width: 34px;
+  height: 34px;
+}
+.canvas :global(.react-flow__attribution) {
+  font-size: 9px;
+  color: #9ba5b5;
+  background: #fbfcfe;
+}
+.canvasHint {
+  position: absolute;
+  left: 60px;
+  bottom: 23px;
+  pointer-events: none;
+  font-size: 10px;
+  color: #8b95a6;
+  display: flex;
+  gap: 9px;
+}
+.canvasHint span {
+  color: #bec6d2;
+}
+.scene {
+  width: 1320px;
+  height: 940px;
+  position: relative;
+  background: transparent;
+  color: #252b38;
+}
+.sceneHeader {
+  height: 110px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0 36px;
+  gap: 40px;
+}
+.sceneNumber {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  font-weight: 600;
+  color: #6c7c98;
+}
+.sceneNumber i {
+  height: 1px;
+  width: 25px;
+  background: #aebfe4;
+}
+.sceneHeader h2 {
+  font-size: 40px;
+  line-height: 1.18;
+  letter-spacing: -1.3px;
+  font-weight: 500;
+  max-width: 1020px;
+  margin: 16px 0 9px;
+  color: #242c3b;
+}
+.sceneHeader p {
+  font-size: 14px;
+  color: #8590a1;
+  margin: 0;
+  line-height: 1.8;
+  max-width: 900px;
+}
+.openButton {
+  border: 1px solid #d8e0ec;
+  border-radius: 100px;
+  padding: 12px 17px;
+  font: inherit;
+  font-size: 11px;
+  background: #fff;
+  color: #586c8f;
+  margin-top: 18px;
+  white-space: nowrap;
+}
+.openButton span {
+  padding-left: 18px;
+  color: #3865df;
+}
+.bfsBody {
+  position: relative;
+  height: 790px;
+}
+.experimentControls {
+  position: absolute;
+  top: 38px;
+  left: 38px;
+  display: flex;
+  gap: 25px;
+  align-items: center;
+  z-index: 2;
+}
+.experimentControls label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: #8c96a6;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.experimentControls select {
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #5c6c87;
+  background: #fff;
+  border: 1px solid #e1e6ef;
+  border-radius: 7px;
+  padding: 7px 10px;
+  max-width: 200px;
+}
+.mapArea {
+  position: absolute;
+  left: 0;
+  top: 84px;
+  width: 990px;
+  height: 560px;
+}
+.deliveryMap {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+.road {
+  stroke: #aeb8cb;
+  stroke-width: 2;
+  fill: none;
+}
+.destination {
+  cursor: pointer;
+  outline: none;
+}
+.destination:focus-visible > ellipse:first-child {
+  stroke: #3865df;
+  stroke-width: 5;
+}
+.destination:hover > ellipse:first-child {
+  fill: #dfe8fa;
+}
+.destinationLabel {
+  font-size: 20px;
+  font-weight: 550;
+  font-family: inherit;
+  fill: #36425b;
+}
+.destinationState {
+  font-size: 9px;
+  letter-spacing: 0.7px;
+  font-family: inherit;
+  fill: #8692a5;
+}
+.mapNote {
+  font-size: 10px;
+  fill: #94a0b2;
+  font-family: inherit;
+  letter-spacing: 0.2px;
+}
+.layerLabel {
+  font-size: 10px;
+  fill: #6f84b4;
+  font-family: inherit;
+  letter-spacing: 2px;
+}
+.islandLabel {
+  font-size: 9px;
+  fill: #7892b5;
+  letter-spacing: 1.8px;
+  font-family: inherit;
+}
+.marginNotes {
+  position: absolute;
+  right: 23px;
+  top: 142px;
+  width: 235px;
+  color: #4e5f7b;
+}
+.annotationNumber {
+  font-size: 9px;
+  letter-spacing: 1.9px;
+  color: #8e9bb0;
+}
+.marginNotes h3 {
+  font-size: 31px;
+  letter-spacing: -0.7px;
+  line-height: 1.25;
+  font-weight: 450;
+  margin: 17px 0;
+  color: #455574;
+}
+.marginNotes p {
+  font-size: 12px;
+  line-height: 1.9;
+  color: #8691a2;
+  margin: 12px 0;
+}
+.smallParcel {
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  margin-top: 22px;
+}
+.smallParcel span {
+  font-size: 10px;
+  line-height: 1.8;
+  color: #8c96a7;
+}
+.routeNote {
+  border-left: 2px solid #afc2ee;
+  padding-left: 16px;
+  margin-top: 29px;
+}
+.routeNote > span {
+  font-size: 8px;
+  letter-spacing: 1.7px;
+  color: #8d9ab0;
+}
+.routeNote p {
+  font-size: 12px;
+  color: #50678e;
+  margin: 8px 0;
+}
+.routeNote small {
+  font-size: 9px;
+  color: #94a0b2;
+}
+.stamp {
+  display: inline-block;
+  border: 1.5px solid #7a93c6;
+  border-radius: 5px;
+  color: #6e87ba;
+  transform: rotate(-7deg);
+  padding: 9px;
+  font-size: 9px;
+  letter-spacing: 1.3px;
+  margin: 15px 0;
+}
+.beltArea {
+  position: absolute;
+  left: 65px;
+  top: 580px;
+  width: 850px;
+}
+.conveyor {
+  width: 100%;
+}
+.conveyorHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 8px;
+  letter-spacing: 1.8px;
+  color: #8996ad;
+  margin: 0 15px 10px;
+}
+.conveyorHeading span:first-child {
+  color: #6a7eaa;
+}
+.conveyorDeck {
+  position: relative;
+}
+.conveyorItems {
+  min-height: 88px;
+  display: flex;
+  gap: 23px;
+  align-items: flex-end;
+  padding: 0 35px 10px;
+  overflow-x: auto;
+}
+.parcelStop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 70px;
+  flex-shrink: 0;
+}
+.parcelStop svg {
+  width: 51px;
+  height: 51px;
+}
+.parcelStop strong {
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.parcelStop > span {
+  font-size: 8px;
+  letter-spacing: 0.4px;
+  color: #8c99af;
+  margin-top: 3px;
+}
+.belt {
+  height: 21px;
+  border-radius: 20px;
+  background: #d9dfe9;
+  border: 1px solid #8b98b0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 10px;
+  box-shadow: 0 5px 0 #edf0f6;
+}
+.belt i {
+  display: block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid #8695ad;
+  background: #f8f9fc;
+}
+.belt > span {
+  font-size: 14px;
+  color: #7485a2;
+}
+.conveyor > p {
+  text-align: center;
+  font-size: 10px;
+  color: #91a0b9;
+  letter-spacing: 0.1px;
+  margin: 13px 0;
+}
+.conveyorEmpty {
+  font-size: 12px;
+  color: #8493aa;
+  padding: 28px;
+  width: 100%;
+  text-align: center;
+}
+.playback {
+  position: absolute;
+  left: 40px;
+  top: 755px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 935px;
+}
+.playback button {
+  font: inherit;
+  border: 1px solid #dce3ef;
+  background: #fff;
+  border-radius: 8px;
+  width: 35px;
+  height: 35px;
+  font-size: 17px;
+  color: #7988a3;
+}
+.playback > div {
+  padding-left: 14px;
+  margin-right: auto;
+  min-width: 0;
+}
+.playback > div > span {
+  display: block;
+  font-size: 7px;
+  letter-spacing: 1.5px;
+  color: #8a9ab7;
+  margin-bottom: 5px;
+}
+.playback strong {
+  font-size: 11px;
+  font-weight: 450;
+  color: #627493;
+  display: block;
+  max-width: 680px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.playback .nextStep {
+  width: auto;
+  padding: 0 16px;
+  font-size: 10px;
+  color: #fff;
+  border-color: #3865df;
+  background: #3865df;
+}
+.playback button:disabled {
+  opacity: 0.38;
+}
+.sceneFootnote {
+  position: absolute;
+  top: 815px;
+  left: 40px;
+  font-size: 7px;
+  letter-spacing: 1.3px;
+  color: #a2adbe;
+}
+.predictionNote {
+  position: absolute;
+  right: 17px;
+  top: 500px;
+  width: 245px;
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 18px 0 0;
+  border-top: 1px solid #e0e6f0;
+  color: #7183a2;
+}
+.predictionNote legend,
+.predictionNote > span {
+  font-size: 12px;
+  font-weight: 500;
+  color: #5a729b;
+  padding: 0 0 10px;
+}
+.predictionNote > p {
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 0 0 14px;
+  color: #8896ae;
+}
+.predictionNote > div {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.predictionNote button {
+  border: 1px solid #dce4f2;
+  border-radius: 7px;
+  background: #fff;
+  color: #7183a2;
+  font: inherit;
+  font-size: 11px;
+  min-width: 31px;
+  min-height: 31px;
+  padding: 7px;
+}
+.predictionNote button[aria-pressed="true"] {
+  background: #e7edfc;
+  border-color: #7395e6;
+  color: #3865df;
+}
+.predictionNote .checkPrediction {
+  margin-top: 13px;
+  background: transparent;
+  border: 0;
+  padding-left: 0;
+  font-size: 10px;
+  color: #507acb;
+}
+.predictionNote button:disabled {
+  opacity: 0.45;
+}
+.predictionNote [role="status"] {
+  font-size: 11px;
+  color: #3865df;
+  margin-top: 10px;
+}
+.conceptBody {
+  position: relative;
+  height: 720px;
+}
+.conceptOrbit {
+  position: absolute;
+  left: 45px;
+  top: 30px;
+  width: 770px;
+  height: 440px;
+}
+.conceptOrbit svg {
+  width: 100%;
+  height: 100%;
+}
+.orbitCaption {
+  position: absolute;
+  left: 265px;
+  bottom: 22px;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  color: #9aa7bc;
+}
+.conceptSteps {
+  position: absolute;
+  right: 40px;
+  top: 50px;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.conceptSteps button {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 12px 0;
+  color: #8997ae;
+  border: 0;
+  background: transparent;
+}
+.conceptSteps button > span {
+  font-size: 10px;
+  color: #a9b4c6;
+  border: 1px solid #dfe6f1;
+  border-radius: 50%;
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.conceptSteps button[aria-selected="true"] {
+  color: #3865df;
+}
+.conceptSteps button[aria-selected="true"] > span {
+  background: #3865df;
+  color: #fff;
+  border-color: #3865df;
+}
+.conceptAnnotation {
+  position: absolute;
+  left: 100px;
+  top: 490px;
+  width: 700px;
+  border-left: 2px solid #b3c7f4;
+  padding: 0 30px;
+}
+.conceptAnnotation > span,
+.generatedExample > span {
+  font-size: 8px;
+  letter-spacing: 1.7px;
+  color: #91a1bc;
+}
+.conceptAnnotation h3 {
+  font-size: 25px;
+  font-weight: 450;
+  letter-spacing: -0.4px;
+  line-height: 1.5;
+  color: #52678d;
+  margin: 12px 0;
+}
+.conceptAnnotation p {
+  font-size: 14px;
+  line-height: 1.9;
+  color: #8594ab;
+  margin: 0;
+}
+.generatedExample {
+  position: absolute;
+  right: 40px;
+  top: 480px;
+  width: 340px;
+}
+.generatedExample p {
+  font-size: 12px;
+  line-height: 1.9;
+  color: #8998ae;
+  margin: 12px 0;
+}
+.genericNotice {
+  position: absolute;
+  left: 100px;
+  bottom: 0;
+  font-size: 9px;
+  color: #a5afbf;
+  letter-spacing: 0.3px;
+}
+.scene button:focus-visible,
+.scene select:focus-visible {
+  outline: 3px solid #7196ed;
+  outline-offset: 4px;
+}
+.scene button {
+  cursor: pointer;
+}
+.scene button:disabled {
+  cursor: default;
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media (max-width: 650px) {
+  .canvasHint {
+    display: none;
+  }
+  .canvas {
+    min-height: 450px;
+  }
+}
+
+.queueScene .mapArea {
+  width: 720px;
+  height: 407px;
+  top: 85px;
+  left: 15px;
+}
+.queueScene .beltArea {
+  top: 490px;
+  left: 65px;
+  width: 900px;
+}
+.queueScene .conveyorItems {
+  min-height: 160px;
+  gap: 30px;
+}
+.queueScene .parcelStop svg {
+  width: 100px;
+  height: 100px;
+}
+.queueScene .parcelStop strong {
+  font-size: 18px;
+}
+.queueScene .parcelStop > span {
+  font-size: 11px;
+}
+.queueScene .conveyorHeading {
+  font-size: 10px;
+}
+.queueScene .conveyor > p {
+  font-size: 13px;
+}
