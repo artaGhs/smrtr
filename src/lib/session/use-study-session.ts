@@ -2,7 +2,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type Attempt,
+  type ChatRequest,
   type Evaluation,
+  type GenerationMode,
   type GenerationStatus,
   type Lesson,
   type Question,
@@ -12,6 +14,15 @@ import { sampleLesson, SAMPLE_INPUT } from "../fixtures/sample-lesson";
 import { generateLesson } from "./generate-lesson";
 import { RequestGate } from "./request-gate";
 import { readSession, saveSession } from "./storage";
+import {
+  cancelChatRequest,
+  copyChatRequest,
+  createChatRequest,
+  getChatRequest,
+  importChatLesson,
+  waitForChatLesson,
+} from "./chat-bridge";
+
 export function useStudySession(): StudyWorkspaceProps {
   const [lesson, setLesson] = useState(sampleLesson);
   const [selectedConceptId, onSelectConcept] = useState(sampleLesson.path[0]);
@@ -19,11 +30,13 @@ export function useStudySession(): StudyWorkspaceProps {
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [generationMode, setGenerationMode] = useState<GenerationMode>("chat");
+  const [chatRequest, setChatRequest] = useState<ChatRequest | null>(null);
   const [restored, setRestored] = useState(false);
   const gate = useRef(new RequestGate());
   const lastCompleteLesson = useRef<Lesson>(sampleLesson);
-  const onCancel = useCallback(() => {
-    gate.current.cancel();
+  const pendingChat = useRef<string | null>(null);
+  const restoreCompleted = useCallback(() => {
     setLesson(lastCompleteLesson.current);
     onSelectConcept((current) =>
       lastCompleteLesson.current.concepts.some((c) => c.id === current)
@@ -31,25 +44,73 @@ export function useStudySession(): StudyWorkspaceProps {
         : (lastCompleteLesson.current.path[0] ??
           lastCompleteLesson.current.concepts[0].id),
     );
-    setStatus("idle");
   }, []);
+  const onCancel = useCallback(() => {
+    gate.current.cancel();
+    if (pendingChat.current)
+      void cancelChatRequest(pendingChat.current).catch(() => undefined);
+    pendingChat.current = null;
+    setChatRequest(null);
+    restoreCompleted();
+    setStatus("idle");
+  }, [restoreCompleted]);
+  const applyCompleted = (result: Lesson) => {
+    lastCompleteLesson.current = result;
+    setLesson(result);
+    onSelectConcept(result.path[0] ?? result.concepts[0].id);
+    setStatus("ready");
+  };
+  async function executeChat(existingId?: string) {
+    const id = crypto.randomUUID();
+    const signal = gate.current.begin(id);
+    setStatus("generating");
+    setError(null);
+    try {
+      const request = existingId
+        ? await getChatRequest(existingId, signal)
+        : await createChatRequest(id, input, signal);
+      if (!gate.current.isCurrent(id)) {
+        if (!existingId)
+          void cancelChatRequest(request.id).catch(() => undefined);
+        return;
+      }
+      pendingChat.current = request.status === "waiting" ? request.id : null;
+      setChatRequest(request);
+      const result = await waitForChatLesson(request, signal, (update) => {
+        if (gate.current.isCurrent(id)) setChatRequest(update);
+      });
+      if (!gate.current.isCurrent(id)) return;
+      pendingChat.current = null;
+      applyCompleted(result);
+      gate.current.finish(id);
+    } catch (cause) {
+      if (!gate.current.isCurrent(id) || signal.aborted) return;
+      pendingChat.current = null;
+      restoreCompleted();
+      setError(
+        cause instanceof Error ? cause.message : "Chat connection failed.",
+      );
+      setStatus("error");
+      gate.current.finish(id);
+    }
+  }
   useEffect(() => {
     let saved = null;
     try {
       saved = readSession(localStorage);
-    } catch {
-      /* Browser storage may be disabled. */
-    }
+    } catch {}
     if (saved) {
       lastCompleteLesson.current = saved.lesson;
       setLesson(saved.lesson);
       setInput(saved.input);
       setAttempts(saved.attempts);
+      setGenerationMode(saved.generationMode ?? "chat");
       onSelectConcept(
         saved.lesson.concepts.some((c) => c.id === saved.selectedConceptId)
           ? saved.selectedConceptId
           : saved.lesson.concepts[0].id,
       );
+      if (saved.chatRequestId) void executeChat(saved.chatRequestId);
     }
     setRestored(true);
     return () => gate.current.cancel();
@@ -62,18 +123,32 @@ export function useStudySession(): StudyWorkspaceProps {
           input,
           selectedConceptId,
           attempts,
+          generationMode,
+          chatRequestId:
+            chatRequest?.status === "waiting" ? chatRequest.id : undefined,
         });
-      } catch {
-        /* Keep the session usable if storage is disabled. */
-      }
+      } catch {}
     }
-  }, [restored, lesson, input, selectedConceptId, attempts]);
+  }, [
+    restored,
+    lesson,
+    input,
+    selectedConceptId,
+    attempts,
+    generationMode,
+    chatRequest,
+  ]);
   const onInputChange = (value: string) => {
     onCancel();
     setInput(value);
     setError(null);
   };
   const onGenerate = async () => {
+    onCancel();
+    if (generationMode === "chat") {
+      await executeChat();
+      return;
+    }
     const requestId = crypto.randomUUID();
     const signal = gate.current.begin(requestId);
     setStatus("generating");
@@ -93,20 +168,14 @@ export function useStudySession(): StudyWorkspaceProps {
         },
       );
       if (!gate.current.isCurrent(requestId)) return;
-      lastCompleteLesson.current = result;
-      setLesson(result);
+      lastCompleteLesson.current = { ...result, origin: "provider" };
+      setLesson(lastCompleteLesson.current);
       if (!planShown) onSelectConcept(result.path[0] ?? result.concepts[0].id);
       setStatus("ready");
       gate.current.finish(requestId);
     } catch (cause) {
       if (!gate.current.isCurrent(requestId) || signal.aborted) return;
-      setLesson(lastCompleteLesson.current);
-      onSelectConcept((current) =>
-        lastCompleteLesson.current.concepts.some((c) => c.id === current)
-          ? current
-          : (lastCompleteLesson.current.path[0] ??
-            lastCompleteLesson.current.concepts[0].id),
-      );
+      restoreCompleted();
       setError(cause instanceof Error ? cause.message : "Generation failed.");
       setStatus("error");
       gate.current.finish(requestId);
@@ -144,6 +213,26 @@ export function useStudySession(): StudyWorkspaceProps {
     error,
     attempts,
     onAnswer,
+    generationMode,
+    chatRequest,
+    onGenerationModeChange: (mode) => {
+      onCancel();
+      setGenerationMode(mode);
+      setError(null);
+    },
+    onCopyChatRequest: async () => {
+      if (!chatRequest) throw new Error("Create a chat request first.");
+      await copyChatRequest(chatRequest.id);
+    },
+    onImportChatLesson: async (json) => {
+      if (!chatRequest || chatRequest.status !== "waiting")
+        throw new Error(
+          "Create a waiting chat request before importing its lesson.",
+        );
+      const request = await importChatLesson(chatRequest.id, json);
+      // Polling consumes this completion too; the gate still protects newer requests.
+      if (pendingChat.current === request.id) setChatRequest(request);
+    },
     onLoadSample: () => {
       onCancel();
       lastCompleteLesson.current = sampleLesson;

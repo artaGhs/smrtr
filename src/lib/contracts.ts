@@ -59,6 +59,7 @@ export const LessonSchema = z.object({
   title: z.string(),
   summary: z.string(),
   mode: z.enum(["sample", "generated"]),
+  origin: z.enum(["chat", "provider"]).optional(),
   sources: z.array(SourceRecordSchema),
   concepts: z.array(ConceptSchema).min(1),
   relations: z.array(RelationSchema),
@@ -97,6 +98,15 @@ export const GenerationEventSchema = z.discriminatedUnion("type", [
   }),
 ]);
 export type GenerationEvent = z.infer<typeof GenerationEventSchema>;
+export const ChatRequestSchema = z.object({
+  id: z.string(),
+  status: z.enum(["waiting", "completed", "error"]),
+  createdAt: z.string(),
+  lesson: LessonSchema.optional(),
+  error: z.string().optional(),
+});
+export type ChatRequest = z.infer<typeof ChatRequestSchema>;
+export type GenerationMode = "chat" | "provider";
 export type SourceRecord = z.infer<typeof SourceRecordSchema>;
 export type Concept = z.infer<typeof ConceptSchema>;
 export type Relation = z.infer<typeof RelationSchema>;
@@ -129,6 +139,12 @@ export type QuestionViewProps = {
   onAnswer: (selectedOptionIds: string[], evaluation: Evaluation) => void;
 };
 export type StudyWorkspaceProps = {
+  generationMode: GenerationMode;
+  onGenerationModeChange: (mode: GenerationMode) => void;
+  chatRequest: ChatRequest | null;
+  onCopyChatRequest: () => Promise<void>;
+  onImportChatLesson: (json: string) => Promise<void>;
+
   lesson: Lesson;
   selectedConceptId: string;
   onSelectConcept: (id: string) => void;
