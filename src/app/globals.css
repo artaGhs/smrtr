@@ -53,7 +53,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible, summary:focus-vis
 .new-lesson-button:hover { background: #3f4960; }
 .request-chip { display: flex; align-items: center; gap: 7px; padding: 7px 9px; margin-right: 4px; font-size: 10px; background: var(--accent-soft); color: var(--accent); border-radius: 6px; }
 .request-error { background: #fff4e8; color: var(--warning); }
-.canvas-view-switch { position: absolute; z-index: 8; left: 26px; top: 87px; display: flex; gap: 2px; background: #fffefef0; border: 1px solid var(--line); box-shadow: 0 2px 7px #1d2b5006; padding: 3px; border-radius: 8px; }
+.canvas-view-switch { position: absolute; z-index: 8; left: 78px; bottom: 28px; display: flex; gap: 2px; background: #fffefef0; border: 1px solid var(--line); box-shadow: 0 2px 7px #1d2b5006; padding: 3px; border-radius: 8px; }
 .canvas-view-switch button { display: flex; gap: 6px; align-items: center; color: #9199a8; padding: 7px 10px; font-size: 10px; border-radius: 5px; }
 .canvas-view-switch button.active { background: #f0f3f9; color: #4a556b; }
 .canvas-view-switch button:hover { color: var(--ink); }
@@ -213,6 +213,7 @@ a.source-locator { color: var(--accent); text-decoration: underline; text-underl
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes drawer-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
 @media (max-width: 1100px) {
+  .canvas-view-switch { left: auto; right: 22px; top: 83px; bottom: auto; }
   .canvas-document-title { max-width: 25vw; }
   .canvas-header { padding: 22px; }
   .canvas-identity { gap: 13px; }
@@ -235,7 +236,7 @@ a.source-locator { color: var(--accent); text-decoration: underline; text-underl
   .toolbar-button > span, .new-lesson-button > span, .request-chip > span { display: none; }
   .new-lesson-button { min-height: 31px; width: 31px; padding: 7px; margin-left: 5px; }
   .request-chip { padding: 8px 6px; margin-right: 0; }
-  .canvas-view-switch { left: 16px; top: 94px; }
+  .canvas-view-switch { left: 16px; right: auto; top: 94px; bottom: auto; }
   .canvas-view-switch button { font-size: 9px; padding: 6px 8px; }
   .sequence-dock, .has-detail .sequence-dock { left: 16px; right: 16px; bottom: 17px; transform: none; padding: 7px; border-radius: 10px; max-width: none; gap: 4px; }
   .sequence-current { flex: 1; min-width: 0; padding-right: 8px; column-gap: 6px; }
