@@ -1,4 +1,8 @@
-import { ChatRequestSchema, type ChatRequest } from "../contracts";
+import {
+  ChatRequestSchema,
+  type ChatRequest,
+  type LearnerProfile,
+} from "../contracts";
 
 async function readResponse(response: Response): Promise<ChatRequest> {
   const data = await response.json();
@@ -14,12 +18,13 @@ export async function createChatRequest(
   requestId: string,
   text: string,
   signal: AbortSignal,
+  learnerProfile?: LearnerProfile,
 ) {
   return readResponse(
     await fetch("/api/chat/requests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ requestId, text }),
+      body: JSON.stringify({ requestId, text, learnerProfile }),
       signal,
     }),
   );

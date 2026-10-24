@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { LessonSchema } from "../contracts";
+import { LessonSchema, LearnerProfileSchema } from "../contracts";
 export const SESSION_KEY = "smrtr.study-session.v1";
 export const SavedSessionSchema = z.object({
   lesson: LessonSchema,
+  learnerProfile: LearnerProfileSchema.optional(),
   generationMode: z.enum(["chat", "provider"]).optional(),
   chatRequestId: z.string().optional(),
   input: z.string().max(40000),
