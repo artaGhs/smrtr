@@ -38,7 +38,7 @@ export function LearningDetail({ session, concept, view, onSelectConcept, onShow
       return target ? <button key={id} onClick={() => onSelectConcept(id)}><RotateCcw size={12} />{target.title}</button> : null;
     })}</div>}</div>;
   }
-  if (view === "sources") return <SourcePassages lesson={lesson} concept={concept} sourceIds={[...new Set([...concept.sourceIds, ...(module?.sourceIds ?? [])])]} onSelectConcept={onSelectConcept} />;
+  if (view === "sources") return <SourcePassages lesson={lesson} concept={concept} sourceIds={[...new Set([...concept.sourceIds, ...(module?.sourceIds ?? []), ...(session.learning?.page.sourceIds ?? [])])]} contextTitle={session.learning ? "this page or selected concept" : undefined} onSelectConcept={onSelectConcept} />;
   if (view === "practice") return <div className="lesson-content practice-content"><span className="eyebrow">FINAL PRACTICE</span><h2>Bring the ideas together.</h2><p>Each question connects back to the concepts in this lesson.</p><div className="practice-status">{lesson.finalQuestions.filter((question) => latest.has(question.id)).length} of {lesson.finalQuestions.length} checked</div>{lesson.finalQuestions.map((question, index) => <section className="final-question" key={question.id}><div className="final-question-header"><span>QUESTION {String(index + 1).padStart(2, "0")}</span><div>{question.conceptIds.map((id) => {
     const target = lesson.concepts.find((item) => item.id === id);
     return target ? <button key={id} onClick={() => onSelectConcept(id)}>{target.title}<ArrowUpRight size={11} /></button> : null;
