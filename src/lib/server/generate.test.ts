@@ -1,0 +1,130 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { GenerationEventSchema, GenerationResponseSchema, type BfsActivity, type GenerationEvent } from "../contracts";
+import { generateLesson } from "./generate";
+import { GenerationError } from "./errors";
+import type { LessonProvider, ProviderRequest } from "./provider";
+import { computeBfs, createBfsQuestions } from "./bfs-questions";
+import { validateLesson } from "./validation";
+
+function lessonParts(topic: string) {
+  const plan = { title: `${topic} study map`, summary: `Learn ${topic} through connected ideas.`, concepts: [
+    { id: "foundation", title: `${topic} foundations`, summary: `Start with ${topic}.`, objective: `Explain ${topic}.`, sourceIds: ["source-input"] },
+    { id: "application", title: `${topic} in practice`, summary: `Apply ${topic}.`, objective: `Use ${topic} in an example.`, sourceIds: ["source-input"] },
+  ], relations: [{ id: "foundation-application", source: "foundation", target: "application", type: "prerequisite" }], path: ["foundation", "application"] };
+  const question = (id: string, conceptId: string) => ({ id, conceptIds: [conceptId], prompt: `Which statement explains ${topic}?`, options: [{ id: "a", text: `An accurate ${topic} statement` }, { id: "b", text: "An unrelated claim" }], correctOptionIds: ["a"], explanation: `The first option explains ${topic}.` });
+  const content = {
+    modules: plan.concepts.map((concept) => ({ id: `module-${concept.id}`, conceptId: concept.id, explanation: `Explanation of ${topic}.`, example: `Generated example of ${topic}.`, sourceIds: ["source-input"], activity: { kind: "concept", prompt: `Explore ${topic}`, steps: [{ title: "Observe", body: `An observation about ${topic}.` }] }, questions: [question(`question-${concept.id}`, concept.id)] })),
+    finalQuestions: [question("final-application", "application")],
+  };
+  return { plan, content };
+}
+
+function providerFor(topic: string, requests: ProviderRequest[] = []): LessonProvider {
+  const parts = lessonParts(topic);
+  return { async generate(request) { requests.push(request); return request.schemaName === "study_plan" ? { status: "ready", reason: "", plan: parts.plan } : parts.content; } };
+}
+
+test("fresh topics produce distinct generated lessons, exact sources, and validated progressive events", async () => {
+  const events: GenerationEvent[] = [];
+  const requests: ProviderRequest[] = [];
+  const original = "  Photosynthesis uses light energy.\r\nChlorophyll absorbs light.  ";
+  const biology = await generateLesson({ requestId: "biology", text: original }, { provider: providerFor("Photosynthesis", requests), onEvent: (event) => events.push(event) });
+  const economics = await generateLesson({ requestId: "economics", text: "Supply and demand determine market prices." }, { provider: providerFor("Supply and demand") });
+  assert.ok(GenerationResponseSchema.safeParse(biology).success);
+  assert.equal(biology.lesson.sources[0].text, original);
+  assert.equal(JSON.parse(requests[0].input).source.text, original.trim().replace(/\r\n/g, "\n"));
+  assert.notEqual(biology.lesson.title, economics.lesson.title);
+  assert.notEqual(biology.lesson.revision, economics.lesson.revision);
+  assert.equal(biology.lesson.mode, "generated");
+  assert.ok(biology.lesson.modules.every((module) => module.activity.kind === "concept"));
+  assert.deepEqual(events.map((event) => event.type), ["plan", "module", "module", "complete"]);
+  assert.ok(events.every((event) => GenerationEventSchema.safeParse(event).success));
+  assert.equal(events[0].type === "plan" && events[0].lesson.modules.length, 0);
+  assert.equal(requests.length, 2);
+});
+
+test("invalid references get one bounded repair before any complete event", async () => {
+  const parts = lessonParts("Biology");
+  let calls = 0;
+  const requests: ProviderRequest[] = [];
+  const provider: LessonProvider = { async generate(request) {
+    requests.push(request); calls++;
+    if (calls === 1) return { status: "ready", reason: "", plan: { ...parts.plan, path: ["ghost"] } };
+    if (calls === 2) return { status: "ready", reason: "", plan: parts.plan };
+    return parts.content;
+  } };
+  const result = await generateLesson({ requestId: "repair", text: "Biology investigates living organisms." }, { provider });
+  assert.equal(result.lesson.path[0], "foundation");
+  assert.ok(JSON.parse(requests[1].input).correction.length);
+  assert.equal(calls, 3);
+});
+
+test("persistent invalid content fails after one repair and never emits complete", async () => {
+  const parts = lessonParts("Biology");
+  let calls = 0;
+  const events: GenerationEvent[] = [];
+  const provider: LessonProvider = { async generate(request) { calls++; return request.schemaName === "study_plan" ? { status: "ready", reason: "", plan: parts.plan } : { ...parts.content, modules: [] }; } };
+  await assert.rejects(generateLesson({ requestId: "invalid", text: "Biology investigates living organisms." }, { provider, onEvent: (event) => events.push(event) }), (error: unknown) => error instanceof GenerationError && error.code === "INVALID_GENERATED_LESSON");
+  assert.equal(calls, 3);
+  assert.deepEqual(events.map((event) => event.type), ["plan"]);
+});
+
+test("insufficient input never falls back to a sample", async () => {
+  const provider: LessonProvider = { async generate() { return { status: "insufficient", reason: "No topic is present", plan: null }; } };
+  await assert.rejects(generateLesson({ requestId: "empty", text: "do the thing now" }, { provider }), (error: unknown) => error instanceof GenerationError && error.code === "INSUFFICIENT_INPUT");
+});
+
+test("input validation happens before provider work", async () => {
+  const provider: LessonProvider = { async generate() { assert.fail("Provider must not run"); } };
+  for (const input of [{ requestId: "a", text: "short" }, { requestId: "", text: "Long enough notes" }, { requestId: "a", text: "!".repeat(20) }, { requestId: "a", text: "a".repeat(40001) }]) {
+    await assert.rejects(generateLesson(input, { provider }), GenerationError);
+  }
+});
+
+test("caller abort and generation timeout cancel the provider", async () => {
+  const waiting: LessonProvider = { generate: ({ signal }) => new Promise((_, reject) => { signal.addEventListener("abort", () => reject(signal.reason), { once: true }); }) };
+  const controller = new AbortController();
+  const pending = generateLesson({ requestId: "abort", text: "Biology investigates living organisms." }, { provider: waiting, signal: controller.signal });
+  controller.abort();
+  await assert.rejects(pending, (error: unknown) => error instanceof GenerationError && error.code === "REQUEST_ABORTED");
+  await assert.rejects(generateLesson({ requestId: "timeout", text: "Biology investigates living organisms." }, { provider: waiting, timeoutMs: 10 }), (error: unknown) => error instanceof GenerationError && error.code === "GENERATION_TIMEOUT");
+});
+
+const graph: BfsActivity = { kind: "bfs", nodes: ["S", "A", "B", "C", "T", "U"], edges: [{ source: "S", target: "B" }, { source: "S", target: "A" }, { source: "A", target: "C" }, { source: "B", target: "T" }, { source: "C", target: "T" }], start: "S", directed: true, neighborOrder: "alphabetical", visitedOn: "enqueue" };
+
+test("BFS answers use the shared simulation core, including unreachable nodes", () => {
+  const trace = computeBfs(graph);
+  assert.deepEqual(trace.order, ["S", "A", "B", "C", "T"]);
+  assert.equal(trace.distances.get("T"), 2);
+  const questions = createBfsQuestions(graph, "bfs", "module-bfs");
+  const correct = (question: typeof questions.moduleQuestion) => question.options.find((option) => question.correctOptionIds.includes(option.id))?.text;
+  assert.equal(correct(questions.moduleQuestion), "S, A, B, C, T");
+  assert.equal(correct(questions.finalQuestion), "Unreachable from the start");
+  assert.match(questions.finalQuestion.prompt, /unweighted/);
+});
+
+test("BFS model answer keys are replaced by computed questions", async () => {
+  const parts = lessonParts("BFS");
+  const provider: LessonProvider = { async generate(request) {
+    return request.schemaName === "study_plan" ? { status: "ready", reason: "", plan: parts.plan } : { ...parts.content, modules: parts.content.modules.map((module, index) => index ? module : { ...module, activity: graph, questions: [] }) };
+  } };
+  const { lesson } = await generateLesson({ requestId: "bfs", text: "Breadth-first search (BFS) explores an unweighted graph in layers." }, { provider });
+  assert.equal(lesson.modules[0].questions[0].id, "module-foundation-computed-order");
+  assert.equal(lesson.finalQuestions[0].id, "module-foundation-computed-distance");
+});
+
+test("semantic validation rejects invented sources, bad options, prerequisite cycles and unverified links", async () => {
+  const { lesson } = await generateLesson({ requestId: "valid", text: "Biology investigates living organisms." }, { provider: providerFor("Biology") });
+  const mutations = [
+    (copy: typeof lesson) => { copy.sources[0].text = "invented"; },
+    (copy: typeof lesson) => { copy.modules[0].questions[0].correctOptionIds = ["missing"]; },
+    (copy: typeof lesson) => { copy.relations.push({ id: "cycle", source: "application", target: "foundation", type: "prerequisite" }); },
+    (copy: typeof lesson) => { copy.modules[0].explanation = "Read https://invented.example"; },
+    (copy: typeof lesson) => { copy.modules[0].sourceIds = ["made-up"]; },
+  ];
+  for (const mutate of mutations) {
+    const copy = structuredClone(lesson); mutate(copy);
+    assert.throws(() => validateLesson(copy, lesson.sources[0].text));
+  }
+});
