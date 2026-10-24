@@ -6,6 +6,7 @@ import { GenerationError } from "./errors";
 import { createOpenAIProvider, type LessonProvider } from "./provider";
 import { ModuleResultSchema, PlanResultSchema, SOURCE_ID, SYSTEM_INSTRUCTIONS, providerJsonSchema } from "./schemas";
 import { LessonValidationError, validateLesson } from "./validation";
+import { CONFIDENCE_GUIDANCE, conceptLearnerContext, normalizeLearnerProfile } from "./learner-profile";
 
 type Options = {
   provider?: LessonProvider;
@@ -23,6 +24,7 @@ export async function generateLesson(input: unknown, options: Options = {}) {
   const parsed = GenerationRequestSchema.safeParse(input);
   if (!parsed.success) throw new GenerationError("INVALID_INPUT", "Provide a requestId and 10–40,000 characters of study notes or an educational topic.", 400);
   const { requestId } = parsed.data;
+  const learnerProfile = normalizeLearnerProfile(parsed.data.learnerProfile);
   if (!requestId.trim() || requestId.length > 200) throw new GenerationError("INVALID_INPUT", "requestId must contain 1–200 characters.", 400);
   // Validation trims for length only. The source record retains the exact original submission.
   const originalText = (input as { text: string }).text;
@@ -40,6 +42,7 @@ export async function generateLesson(input: unknown, options: Options = {}) {
     const provider = options.provider ?? createOpenAIProvider();
     const base = {
       id: `lesson-${randomUUID()}`, revision: randomUUID(), mode: "generated" as const,
+      learnerProfile,
       sources: [{ id: SOURCE_ID, title: "Your submitted notes or topic", text: originalText }],
     };
     const publish = (event: GenerationEvent) => { if (!controller.signal.aborted) options.onEvent?.(event); };
@@ -52,7 +55,7 @@ export async function generateLesson(input: unknown, options: Options = {}) {
             schemaName,
             jsonSchema: providerJsonSchema(schema),
             instructions: SYSTEM_INSTRUCTIONS,
-            input: JSON.stringify({ source: { id: SOURCE_ID, text: notes }, task: prompt, ...context, ...(repair.length ? { correction: repair, instruction: "Return a fresh corrected result. Retain the topic and obey all ID and reference constraints." } : {}) }),
+            input: JSON.stringify({ source: { id: SOURCE_ID, text: notes }, learnerProfile, confidenceGuidance: CONFIDENCE_GUIDANCE[learnerProfile.overall], task: prompt, ...context, ...(repair.length ? { correction: repair, instruction: "Return a fresh corrected result. Retain the topic and obey all ID and reference constraints." } : {}) }),
             signal: controller.signal,
             maxOutputTokens,
           });
@@ -71,7 +74,7 @@ export async function generateLesson(input: unknown, options: Options = {}) {
       }
       throw new GenerationError("GENERATION_FAILED", "Could not create a valid lesson.");
     }
-    const result = await stage(PlanResultSchema, "study_plan", "First create a compact conceptual and teaching plan: 3–6 concepts where useful, typed connections, a valid prerequisite path, and required teachingPlan. Begin teaching with a concrete example or visual big-picture situation, an accessible opening question, then reveal the underlying abstractions. Give each concept a deliberate example/visual/explanation/practice approach and a specific learner purpose. Teaching sequence is independent from prerequisite path and may introduce an application before explaining its underlying mechanism. No module content yet. If insufficient, plan must be null and reason should tell the learner what material to provide. If ready, plan must be present.", 3800, (value) => {
+    const result = await stage(PlanResultSchema, "study_plan", "Create an authored conceptual, teaching and page design: 3–6 concepts where useful, typed connections with explanatory meaning, a valid prerequisite path, required teachingPlan and required learningDesign. Build one continuing scenario around a central question/objective and stated assumed knowledge. Author bounded prose/linked-support pages, their acyclic hierarchy and a main problem->intuitive layers->questions->mechanisms->why/limits->transfer sequence; these are three different structures from concept relations and concept prerequisite path. Canonical scenario activity inputs must be reused exactly by the matching module and all core/support pages. Only a clearly labeled transfer page may use a different network. Make novice vs experienced routes substantively different; respond to the fixed learnerProfile and stable manual topic overrides, with topicIds only from that profile. Begin teaching with a concrete example or visual big-picture situation before underlying abstractions. No module content yet. If insufficient, plan must be null and reason should tell the learner what material to provide. If ready, plan must be present.", 14000, (value) => {
       if (value.status === "insufficient") {
         if (value.plan !== null) throw new LessonValidationError(["insufficient result must have null plan"]);
         return;
@@ -92,8 +95,9 @@ export async function generateLesson(input: unknown, options: Options = {}) {
         const teachingPosition = cursor++;
         const teachingStep = teachingSequence[teachingPosition];
         const conceptId = teachingStep.conceptId;
+        const learnerContext = conceptLearnerContext(plan, conceptId);
         let validatedModule: Lesson["modules"][number] | undefined;
-        await stage(ModuleResultSchema, "study_module", `Teach only targetConceptId using teachingStep.approach and teachingStep.purpose. This is teaching step ${teachingPosition + 1} of ${teachingSequence.length}, independent of the prerequisite path. Connect it to the plan's openingQuestion and bigPicture. If approach is example, begin with a concrete worked situation and a prediction before naming abstractions. If visual, use activity steps to expose changes, comparisons or relationships the learner can observe. If explanation, derive the mechanism from the concrete intuition already introduced. If practice, ask the learner to apply or retrieve an idea and then explain the feedback. Make this choice change the actual lesson content, not just its label. Preserve its concept ID and sourceIds ["source-input"]. Use module ID "module-${conceptId}" and question IDs prefixed "question-${conceptId}-" to avoid collisions with other independent modules. Give a concise explanation, a clearly labeled generated example, one activity with 3–5 purposeful prediction/observation/reveal steps, and 1–2 precise questions. Use BFS activity only for the concept that directly teaches the BFS algorithm; otherwise use conceptual activities. The server replaces any BFS module example and questions with computed graph practice. All other questions must be conceptual, never calculated BFS trace or path questions.`, 3200, (value) => {
+        await stage(ModuleResultSchema, "study_module", `Teach only targetConceptId using teachingStep.approach and teachingStep.purpose. This is teaching step ${teachingPosition + 1} of ${teachingSequence.length}, independent of the prerequisite path. Adapt substantively to learnerContext.effectiveLevel and guidance (manual topic overrides take priority over overall); this is self-report, not proven mastery. Use the ONE continuing learningDesign.scenario with the same entities and question, and support the target pages and route in learnerContext. If targetConceptId equals scenario.activityConceptId, reuse scenario.activity exactly; core/support must not invent another graph. A separately bound transfer concept may use a clearly labeled different generated network. Connect to the plan's openingQuestion/bigPicture/centralQuestion/objective. If approach is example, begin with a concrete worked situation and prediction before abstractions. If visual, use activity steps to expose changes and relationships. If explanation, derive mechanisms from the scenario. If practice, ask for application and explain feedback. Make approach and learner confidence change the actual content rather than labels. Preserve concept ID and sourceIds ["source-input"]. Use module ID "module-${conceptId}" and question IDs prefixed "question-${conceptId}-". Give a concise explanation, a generated example grounded in the continuing scenario, one activity with 3–5 meaningful steps, and 1–2 questions. Other nonalgorithm concepts use conceptual activities. The server replaces BFS module example/questions with computed graph practice. All other questions must be conceptual, never calculated BFS outcomes.`, 3200, (value) => {
           let module = value.module;
           let distanceQuestion: Question | undefined;
           if (module.conceptId !== conceptId || module.id !== `module-${conceptId}`) throw new LessonValidationError(["module must match targetConceptId and required module ID"]);
@@ -110,7 +114,7 @@ export async function generateLesson(input: unknown, options: Options = {}) {
           validatedModule = module;
           modules.set(conceptId, module);
           if (distanceQuestion) computedFinal.set(conceptId, distanceQuestion);
-        }, { targetConceptId: conceptId, teachingStep, teachingPosition, plan: result.plan });
+        }, { targetConceptId: conceptId, teachingStep, teachingPosition, learnerContext, plan: result.plan });
         if (!validatedModule) throw new GenerationError("GENERATION_FAILED", "Could not complete a lesson module.");
         publish({ type: "module", requestId, module: validatedModule });
       }
