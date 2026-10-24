@@ -50,6 +50,9 @@ export function useStudySession(): StudyWorkspaceProps {
     if (pendingChat.current)
       void cancelChatRequest(pendingChat.current).catch(() => undefined);
     pendingChat.current = null;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("request");
+    window.history.replaceState(null, "", url);
     setChatRequest(null);
     restoreCompleted();
     setStatus("idle");
@@ -58,6 +61,7 @@ export function useStudySession(): StudyWorkspaceProps {
     lastCompleteLesson.current = result;
     setLesson(result);
     onSelectConcept(result.path[0] ?? result.concepts[0].id);
+    setInput(result.sources[0]?.text ?? input);
     setStatus("ready");
   };
   async function executeChat(existingId?: string) {
@@ -76,6 +80,9 @@ export function useStudySession(): StudyWorkspaceProps {
       }
       pendingChat.current = request.status === "waiting" ? request.id : null;
       setChatRequest(request);
+      const url = new URL(window.location.href);
+      url.searchParams.set("request", request.id);
+      window.history.replaceState(null, "", url);
       const result = await waitForChatLesson(request, signal, (update) => {
         if (gate.current.isCurrent(id)) setChatRequest(update);
       });
@@ -99,6 +106,9 @@ export function useStudySession(): StudyWorkspaceProps {
     try {
       saved = readSession(localStorage);
     } catch {}
+    const linkedRequestId = new URLSearchParams(window.location.search).get(
+      "request",
+    );
     if (saved) {
       lastCompleteLesson.current = saved.lesson;
       setLesson(saved.lesson);
@@ -110,7 +120,12 @@ export function useStudySession(): StudyWorkspaceProps {
           ? saved.selectedConceptId
           : saved.lesson.concepts[0].id,
       );
-      if (saved.chatRequestId) void executeChat(saved.chatRequestId);
+      if (!linkedRequestId && saved.chatRequestId)
+        void executeChat(saved.chatRequestId);
+    }
+    if (linkedRequestId) {
+      setGenerationMode("chat");
+      void executeChat(linkedRequestId);
     }
     setRestored(true);
     return () => gate.current.cancel();

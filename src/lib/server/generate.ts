@@ -4,7 +4,7 @@ import { GenerationRequestSchema, GenerationResponseSchema, type GenerationEvent
 import { createBfsQuestions } from "./bfs-questions";
 import { GenerationError } from "./errors";
 import { createOpenAIProvider, type LessonProvider } from "./provider";
-import { ContentSchema, PlanResultSchema, SOURCE_ID, SYSTEM_INSTRUCTIONS } from "./schemas";
+import { ModuleResultSchema, PlanResultSchema, SOURCE_ID, SYSTEM_INSTRUCTIONS, providerJsonSchema } from "./schemas";
 import { LessonValidationError, validateLesson } from "./validation";
 
 type Options = {
@@ -43,16 +43,16 @@ export async function generateLesson(input: unknown, options: Options = {}) {
       sources: [{ id: SOURCE_ID, title: "Your submitted notes or topic", text: originalText }],
     };
     const publish = (event: GenerationEvent) => { if (!controller.signal.aborted) options.onEvent?.(event); };
-    async function stage<T>(schema: z.ZodType<T>, schemaName: string, prompt: string, maxOutputTokens: number, validate: (value: T) => void): Promise<T> {
+    async function stage<T>(schema: z.ZodType<T>, schemaName: string, prompt: string, maxOutputTokens: number, validate: (value: T) => void, context: Record<string, unknown> = {}): Promise<T> {
       let repair: string[] = [];
       for (let attempt = 0; attempt < 2; attempt++) {
         controller.signal.throwIfAborted();
         try {
           const raw = await provider.generate({
             schemaName,
-            jsonSchema: z.toJSONSchema(schema) as Record<string, unknown>,
+            jsonSchema: providerJsonSchema(schema),
             instructions: SYSTEM_INSTRUCTIONS,
-            input: JSON.stringify({ source: { id: SOURCE_ID, text: notes }, task: prompt, ...(repair.length ? { correction: repair, instruction: "Return a fresh corrected result. Retain the topic and obey all ID and reference constraints." } : {}) }),
+            input: JSON.stringify({ source: { id: SOURCE_ID, text: notes }, task: prompt, ...context, ...(repair.length ? { correction: repair, instruction: "Return a fresh corrected result. Retain the topic and obey all ID and reference constraints." } : {}) }),
             signal: controller.signal,
             maxOutputTokens,
           });
@@ -82,26 +82,46 @@ export async function generateLesson(input: unknown, options: Options = {}) {
     if (result.status === "insufficient" || !result.plan) throw new GenerationError("INSUFFICIENT_INPUT", "The input did not identify enough study material. Add a concrete educational topic or a paragraph of notes.", 422);
     const plan = validateLesson({ ...base, ...result.plan, modules: [], finalQuestions: [] }, originalText, true);
     publish({ type: "plan", requestId, lesson: plan });
-    let complete: Lesson | undefined;
-    await stage(ContentSchema, "study_content", `Now teach this exact validated plan; preserve all concept IDs and source IDs: ${JSON.stringify(result.plan)}. Create exactly one module per concept in learning-path order, each with 1–3 concise explanatory paragraphs, a clearly labeled generated example, an activity, and 1–2 precise questions. Concept activities should have 3–5 meaningful reveal steps. Include 2–3 final practice questions across the concepts. For any BFS module the graph inputs must be valid; the server will replace that module's example and questions with computed graph practice. All other questions must be conceptual, never calculated BFS trace or path questions.`, 10000, (content) => {
-      const computedFinal: Question[] = [];
-      const modules = content.modules.map((module) => {
-        if (module.activity.kind !== "bfs") return module;
-        try {
-          const computed = createBfsQuestions(module.activity, module.conceptId, module.id);
-          computedFinal.push(computed.finalQuestion);
-          return { ...module, example: computed.example, questions: [computed.moduleQuestion] };
-        } catch {
-          throw new LessonValidationError(["BFS activity graph must have unique valid node labels, known start/endpoints, and no duplicate edges"]);
-        }
-      });
-      complete = validateLesson({ ...plan, modules, finalQuestions: [...computedFinal, ...content.finalQuestions].slice(0, 5) }, originalText);
-    });
-    if (!complete) throw new GenerationError("GENERATION_FAILED", "Could not complete the lesson.");
-    for (const module of complete.modules) publish({ type: "module", requestId, module });
+    const modules = new Map<string, Lesson["modules"][number]>();
+    const computedFinal = new Map<string, Question>();
+    let cursor = 0;
+    async function worker() {
+      while (cursor < plan.path.length) {
+        const conceptId = plan.path[cursor++];
+        let validatedModule: Lesson["modules"][number] | undefined;
+        await stage(ModuleResultSchema, "study_module", `Teach only targetConceptId from the validated plan. Preserve its concept ID and sourceIds ["source-input"]. Use module ID "module-${conceptId}" and question IDs prefixed "question-${conceptId}-" to avoid collisions with other independent modules. Give 1–3 concise explanatory paragraphs, a clearly labeled generated example, one activity, and 1–2 precise questions. Concept activities should have 3–5 meaningful reveal steps. Use BFS activity only for the concept that directly teaches the BFS algorithm; otherwise use conceptual activities. The server replaces any BFS module example and questions with computed graph practice. All other questions must be conceptual, never calculated BFS trace or path questions.`, 3200, (value) => {
+          let module = value.module;
+          let distanceQuestion: Question | undefined;
+          if (module.conceptId !== conceptId || module.id !== `module-${conceptId}`) throw new LessonValidationError(["module must match targetConceptId and required module ID"]);
+          if (module.activity.kind === "bfs") {
+            try {
+              const computed = createBfsQuestions(module.activity, conceptId, module.id);
+              distanceQuestion = computed.finalQuestion;
+              module = { ...module, example: computed.example, questions: [computed.moduleQuestion] };
+            } catch {
+              throw new LessonValidationError(["BFS activity graph must have unique valid node labels, known start/endpoints, and no duplicate edges"]);
+            }
+          }
+          validateLesson({ ...plan, modules: [...modules.values(), module], finalQuestions: [] }, originalText, true);
+          validatedModule = module;
+          modules.set(conceptId, module);
+          if (distanceQuestion) computedFinal.set(conceptId, distanceQuestion);
+        }, { targetConceptId: conceptId, plan: result.plan });
+        if (!validatedModule) throw new GenerationError("GENERATION_FAILED", "Could not complete a lesson module.");
+        publish({ type: "module", requestId, module: validatedModule });
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(3, plan.path.length) }, () => worker()));
+    const orderedModules = plan.path.map((id) => modules.get(id)!);
+    // Final practice reuses validated, input-specific retrieval questions. BFS adds
+    // a fresh computed distance task rather than trusting a generated answer key.
+    const retrieval = orderedModules.flatMap((module) => module.questions.slice(0, 1).map((question) => ({ ...question, id: `final-${question.id}` })));
+    const verifiedBfsFinal = plan.path.flatMap((id) => computedFinal.has(id) ? [computedFinal.get(id)!] : []);
+    const complete = validateLesson({ ...plan, modules: orderedModules, finalQuestions: [...verifiedBfsFinal, ...retrieval].slice(0, 5) }, originalText);
     publish({ type: "complete", requestId, lesson: complete });
     return GenerationResponseSchema.parse({ requestId, lesson: complete });
   } catch (error) {
+    controller.abort();
     if (timedOut) throw new GenerationError("GENERATION_TIMEOUT", "Generation took too long. Try shorter notes or a narrower topic.", 504);
     if (options.signal?.aborted) throw new GenerationError("REQUEST_ABORTED", "Generation was canceled.", 499);
     throw error;
