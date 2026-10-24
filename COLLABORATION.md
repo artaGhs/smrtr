@@ -18,3 +18,7 @@ Source records preserve original material. Concepts/typed relations/path form se
 
 ## Preview status
 Initial scaffold uses a sample fixture. Generation route deliberately returns a 503 until backend implementation lands. Client cancels prior requests and ignores stale responses, retaining previous lesson on errors. Attempts preserve lesson revision.
+
+## Progressive transport
+
+Client sends `Accept: application/x-ndjson, application/json`; ordinary JSON success remains supported. NDJSON events conform to `GenerationEventSchema`: `plan` contains a complete validated Lesson with modules optionally empty; `module` contains one complete LessonModule; `complete` contains the final Lesson; `error` contains a human-readable error. All events include the original requestId. The client buffers incomplete transport chunks. Canceled or failed partial lessons revert to the last completed lesson and are never saved as completed sessions.

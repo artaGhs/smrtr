@@ -1,14 +1,17 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  GenerationResponseSchema,
   type Attempt,
   type Evaluation,
   type GenerationStatus,
+  type Lesson,
   type Question,
   type StudyWorkspaceProps,
 } from "../contracts";
 import { sampleLesson, SAMPLE_INPUT } from "../fixtures/sample-lesson";
+import { generateLesson } from "./generate-lesson";
+import { RequestGate } from "./request-gate";
+import { readSession, saveSession } from "./storage";
 export function useStudySession(): StudyWorkspaceProps {
   const [lesson, setLesson] = useState(sampleLesson);
   const [selectedConceptId, onSelectConcept] = useState(sampleLesson.path[0]);
@@ -16,54 +19,97 @@ export function useStudySession(): StudyWorkspaceProps {
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const active = useRef<{ id: string; controller: AbortController } | null>(
-    null,
-  );
+  const [restored, setRestored] = useState(false);
+  const gate = useRef(new RequestGate());
+  const lastCompleteLesson = useRef<Lesson>(sampleLesson);
   const onCancel = useCallback(() => {
-    active.current?.controller.abort();
-    active.current = null;
+    gate.current.cancel();
+    setLesson(lastCompleteLesson.current);
+    onSelectConcept((current) =>
+      lastCompleteLesson.current.concepts.some((c) => c.id === current)
+        ? current
+        : (lastCompleteLesson.current.path[0] ??
+          lastCompleteLesson.current.concepts[0].id),
+    );
     setStatus("idle");
   }, []);
-  useEffect(() => () => active.current?.controller.abort(), []);
+  useEffect(() => {
+    let saved = null;
+    try {
+      saved = readSession(localStorage);
+    } catch {
+      /* Browser storage may be disabled. */
+    }
+    if (saved) {
+      lastCompleteLesson.current = saved.lesson;
+      setLesson(saved.lesson);
+      setInput(saved.input);
+      setAttempts(saved.attempts);
+      onSelectConcept(
+        saved.lesson.concepts.some((c) => c.id === saved.selectedConceptId)
+          ? saved.selectedConceptId
+          : saved.lesson.concepts[0].id,
+      );
+    }
+    setRestored(true);
+    return () => gate.current.cancel();
+  }, []);
+  useEffect(() => {
+    if (restored) {
+      try {
+        saveSession(localStorage, {
+          lesson: lastCompleteLesson.current,
+          input,
+          selectedConceptId,
+          attempts,
+        });
+      } catch {
+        /* Keep the session usable if storage is disabled. */
+      }
+    }
+  }, [restored, lesson, input, selectedConceptId, attempts]);
   const onInputChange = (value: string) => {
     onCancel();
     setInput(value);
     setError(null);
   };
   const onGenerate = async () => {
-    onCancel();
     const requestId = crypto.randomUUID();
-    const controller = new AbortController();
-    active.current = { id: requestId, controller };
+    const signal = gate.current.begin(requestId);
     setStatus("generating");
     setError(null);
+    let planShown = false;
     try {
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, text: input }),
-        signal: controller.signal,
-      });
-      const data = await response.json();
-      if (active.current?.id !== requestId) return;
-      if (!response.ok)
-        throw new Error(
-          typeof data.error === "string"
-            ? data.error
-            : "Could not create your study map. Try again.",
-        );
-      const result = GenerationResponseSchema.parse(data);
-      if (result.requestId !== requestId)
-        throw new Error("Generation response did not match this request.");
-      setLesson(result.lesson);
-      onSelectConcept(result.lesson.path[0] ?? result.lesson.concepts[0].id);
+      const result = await generateLesson(
+        { requestId, text: input },
+        signal,
+        (partial) => {
+          if (!gate.current.isCurrent(requestId)) return;
+          setLesson(partial);
+          if (!planShown) {
+            onSelectConcept(partial.path[0] ?? partial.concepts[0].id);
+            planShown = true;
+          }
+        },
+      );
+      if (!gate.current.isCurrent(requestId)) return;
+      lastCompleteLesson.current = result;
+      setLesson(result);
+      if (!planShown) onSelectConcept(result.path[0] ?? result.concepts[0].id);
       setStatus("ready");
-      active.current = null;
+      gate.current.finish(requestId);
     } catch (cause) {
-      if (active.current?.id !== requestId || controller.signal.aborted) return;
+      if (!gate.current.isCurrent(requestId) || signal.aborted) return;
+      setLesson(lastCompleteLesson.current);
+      onSelectConcept((current) =>
+        lastCompleteLesson.current.concepts.some((c) => c.id === current)
+          ? current
+          : (lastCompleteLesson.current.path[0] ??
+            lastCompleteLesson.current.concepts[0].id),
+      );
       setError(cause instanceof Error ? cause.message : "Generation failed.");
       setStatus("error");
-      active.current = null;
+      gate.current.finish(requestId);
     }
   };
   const onAnswer = (
@@ -71,19 +117,21 @@ export function useStudySession(): StudyWorkspaceProps {
     selectedOptionIds: string[],
     evaluation: Evaluation,
   ) =>
-    setAttempts((previous) => [
-      ...previous,
-      {
-        id: crypto.randomUUID(),
-        lessonId: lesson.id,
-        revision: lesson.revision,
-        questionId: question.id,
-        conceptIds: question.conceptIds,
-        selectedOptionIds,
-        correct: evaluation.correct,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+    setAttempts((previous) =>
+      [
+        ...previous,
+        {
+          id: crypto.randomUUID(),
+          lessonId: lesson.id,
+          revision: lesson.revision,
+          questionId: question.id,
+          conceptIds: question.conceptIds,
+          selectedOptionIds,
+          correct: evaluation.correct,
+          createdAt: new Date().toISOString(),
+        },
+      ].slice(-1000),
+    );
   return {
     lesson,
     selectedConceptId,
@@ -98,6 +146,7 @@ export function useStudySession(): StudyWorkspaceProps {
     onAnswer,
     onLoadSample: () => {
       onCancel();
+      lastCompleteLesson.current = sampleLesson;
       setLesson(sampleLesson);
       onSelectConcept(sampleLesson.path[0]);
       setInput(SAMPLE_INPUT);

@@ -74,6 +74,29 @@ export const GenerationResponseSchema = z.object({
   requestId: z.string(),
   lesson: LessonSchema,
 });
+export const GenerationEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("plan"),
+    requestId: z.string(),
+    lesson: LessonSchema,
+  }),
+  z.object({
+    type: z.literal("module"),
+    requestId: z.string(),
+    module: LessonModuleSchema,
+  }),
+  z.object({
+    type: z.literal("complete"),
+    requestId: z.string(),
+    lesson: LessonSchema,
+  }),
+  z.object({
+    type: z.literal("error"),
+    requestId: z.string(),
+    error: z.string(),
+  }),
+]);
+export type GenerationEvent = z.infer<typeof GenerationEventSchema>;
 export type SourceRecord = z.infer<typeof SourceRecordSchema>;
 export type Concept = z.infer<typeof ConceptSchema>;
 export type Relation = z.infer<typeof RelationSchema>;
