@@ -7,22 +7,26 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test src/**/*.test.ts",
+    "mcp": "tsx mcp/server.ts",
+    "bridge": "tsx mcp/bridge.ts",
+    "test:mcp": "tsx --test mcp/*.test.ts"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^2.0.4",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "@xyflow/react": "^12.10.0",
+    "lucide-react": "^0.577.0",
     "next": "^16.4.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "zod": "^4.3.6",
-    "@xyflow/react": "^12.10.0",
-    "@dagrejs/dagre": "^2.0.4",
-    "lucide-react": "^0.577.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
     "@types/node": "^22.19.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }
