@@ -11,6 +11,7 @@ import {
   knownDistance,
   lessonBfsActivity,
   safeBfsTrace,
+  teachingViewport,
 } from "./scene-model";
 
 test("scene indices follow teaching order independently of the prerequisite path", () => {
@@ -123,4 +124,39 @@ test("invalid graphs and prototype-like unreachable labels do not fabricate visu
   assert.equal(knownDistance(trace.frames[0], "constructor"), undefined);
   assert.equal(deliveryLayout(trace).positions.get("constructor")!.layer, null);
   assert.equal(defaultRouteTarget(trace), "S");
+});
+
+test("known-bounds viewports reserve shell space and retain a readable mobile opening", () => {
+  for (const index of [0, 1, 4]) {
+    const desktop = teachingViewport(index, 1440, 1000, false);
+    const top = desktop.y + (index % 2 ? 70 : 0) * desktop.zoom;
+    const left = desktop.x + index * 1540 * desktop.zoom;
+    assert.ok(top >= 89 && top + 940 * desktop.zoom <= 891);
+    assert.ok(left >= 44 && left + 1320 * desktop.zoom <= 1396);
+    const mobile = teachingViewport(index, 390, 844, true);
+    assert.ok(mobile.zoom > 0.5);
+    assert.equal(mobile.x + index * 1540 * mobile.zoom, 12);
+    assert.equal(mobile.y + (index % 2 ? 70 : 0) * mobile.zoom, 135);
+  }
+});
+test("isolation experiment disconnects a reachable goal even when the last node was already isolated", () => {
+  const activity = lessonBfsActivity(sampleLesson)!;
+  const source = { ...activity, nodes: [...activity.nodes, "U"] };
+  const result = createBfsTrace(experimentGraph(source, "S", true, "island"));
+  assert.ok(result.unreachable.includes("T"));
+  assert.ok(result.unreachable.includes("U"));
+});
+
+test("a ten-stop chain keeps roads and destinations apart rather than compressing their hops", () => {
+  const base = lessonBfsActivity(sampleLesson)!;
+  const nodes = Array.from({ length: 10 }, (_, i) => `N${i}`);
+  const edges = nodes
+    .slice(1)
+    .map((target, i) => ({ source: nodes[i], target }));
+  const layout = deliveryLayout(
+    createBfsTrace({ ...base, nodes, edges, start: "N0" }),
+  );
+  const xs = nodes.map((node) => layout.positions.get(node)!.x);
+  assert.ok(xs.every((x, i) => i === 0 || x - xs[i - 1] >= 160));
+  assert.ok(xs.at(-1)! + 60 < layout.width);
 });

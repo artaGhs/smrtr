@@ -52,7 +52,6 @@ type SceneData = Record<string, unknown> & {
 type TeachingNode = Node<SceneData, "teaching">;
 const nodeTypes = { teaching: TeachingScene };
 
-
 export function LearningCanvas(props: LearningCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -173,8 +172,10 @@ function CanvasBoard(props: LearningCanvasProps) {
   );
   useEffect(() => {
     if (!viewportInitialized || !scenes[active] || !width || !height) return;
-    void setViewport(teachingViewport(active,width,height,mobile), {duration:0});
-  }, [active,viewportInitialized,scenes,setViewport,width,height,mobile]);
+    void setViewport(teachingViewport(active, width, height, mobile), {
+      duration: 0,
+    });
+  }, [active, viewportInitialized, scenes, setViewport, width, height, mobile]);
   const activeData = nodes[active]?.data;
   return (
     <div className={styles.canvas} aria-label="Interactive teaching canvas">
@@ -201,7 +202,11 @@ function CanvasBoard(props: LearningCanvasProps) {
         <Controls
           position="bottom-left"
           showInteractive={false}
-          onFitView={() => {void setViewport(teachingViewport(active,width,height,mobile),{duration:0});}}
+          onFitView={() => {
+            void setViewport(teachingViewport(active, width, height, mobile), {
+              duration: 0,
+            });
+          }}
         />
       </ReactFlow>
       <div className={styles.canvasHint}>
@@ -214,6 +219,9 @@ function CanvasBoard(props: LearningCanvasProps) {
           role="group"
           aria-label="Mobile simulation controls"
         >
+          <span className={styles.mobilePanHint}>
+            Pan down to predict · Pinch to zoom
+          </span>
           <button
             type="button"
             aria-label="Replay canvas BFS"
@@ -533,36 +541,38 @@ function ConceptScene({ scene }: { scene: CanvasScene }) {
       : [{ title: scene.concept.title, body: scene.concept.summary }];
   const [active, setActive] = useState(0);
   const step = steps[active] ?? steps[0];
+  const points = steps.map((_, i) => ({
+    x: steps.length === 1 ? 375 : 85 + (i * 580) / (steps.length - 1),
+    y: 210 + Math.sin(i * 1.8) * 90,
+  }));
+  const stepPath = points
+    .map((point, i) => `${i ? "L" : "M"}${point.x} ${point.y}`)
+    .join(" ");
   return (
     <div className={styles.conceptBody}>
       <div className={styles.conceptOrbit} aria-hidden="true">
         <svg viewBox="0 0 750 420">
           <path
-            d="M90 280C180 280 130 130 260 130S400 310 510 260s75-125 165-125"
+            d={stepPath}
             fill="none"
             stroke="#cbd6ee"
             strokeWidth="3"
             strokeDasharray="9 9"
           />
-          {[
-            [90, 280],
-            [260, 130],
-            [510, 260],
-            [675, 135],
-          ].map(([x, y], i) => (
+          {points.map(({ x, y }, i) => (
             <g key={i} transform={`translate(${x},${y})`}>
               <circle
-                r={i === active % 4 ? 47 : 33}
+                r={i === active ? 47 : 33}
                 fill={
-                  i === active % 4
+                  i === active
                     ? "#3865df"
-                    : ["#f7e7ce", "#e5dff3", "#f7ddd5", "#e0e8f8"][i]
+                    : ["#f7e7ce", "#e5dff3", "#f7ddd5", "#e0e8f8"][i % 4]
                 }
               />
               <text
                 textAnchor="middle"
                 y="9"
-                fill={i === active % 4 ? "white" : "#68768e"}
+                fill={i === active ? "white" : "#68768e"}
                 fontSize="25"
               >
                 {String(i + 1).padStart(2, "0")}
@@ -576,15 +586,14 @@ function ConceptScene({ scene }: { scene: CanvasScene }) {
       </div>
       <div
         className={`nodrag nopan ${styles.conceptSteps}`}
-        role="tablist"
+        role="group"
         aria-label="Explanation steps"
       >
         {steps.map((item, i) => (
           <button
             type="button"
             key={i}
-            role="tab"
-            aria-selected={active === i}
+            aria-pressed={active === i}
             onClick={() => setActive(i)}
           >
             <span>{String(i + 1).padStart(2, "0")}</span>

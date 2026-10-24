@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { BfsFrame, BfsTrace } from "../../lib/simulation/bfs";
+import { pathTo, type BfsFrame, type BfsTrace } from "../../lib/simulation/bfs";
 import { deliveryLayout, knownDistance } from "./scene-model";
 import styles from "./canvas.module.css";
 
@@ -146,12 +146,14 @@ export function DeliveryMap({
   onInspect: (node: string) => void;
   target: string;
 }) {
-  const { positions, layers, depth, height } = deliveryLayout(trace);
+  const { positions, layers, height, width, spacing, islandX } =
+    deliveryLayout(trace);
   const marker = useId().replace(/:/g, "");
+  const route = pathTo(frame, target);
   return (
     <svg
       className={styles.deliveryMap}
-      viewBox={`0 0 1000 ${height}`}
+      viewBox={`0 0 ${width} ${height}`}
       role="group"
       aria-label="Delivery network. Buildings are graph nodes; every road is one unweighted edge. Select a destination to inspect its route."
     >
@@ -172,16 +174,16 @@ export function DeliveryMap({
         [...layers.keys()].map((layer) => (
           <g key={layer}>
             <rect
-              x={55 + layer * (depth ? 550 / depth : 0) - 55}
+              x={95 + layer * spacing - spacing / 2}
               y="100"
-              width={depth ? 550 / depth : 160}
+              width={spacing}
               height={height - 195}
               rx="65"
               fill={layer % 2 ? "#e6edff" : "#f0f3fa"}
               opacity=".65"
             />
             <text
-              x={95 + layer * (depth ? 550 / depth : 0)}
+              x={95 + layer * spacing}
               y="79"
               textAnchor="middle"
               className={styles.layerLabel}
@@ -200,7 +202,7 @@ export function DeliveryMap({
         strokeDasharray="6 9"
       />
       {trace.unreachable.length > 0 && (
-        <g>
+        <g transform={`translate(${islandX - 825},0)`}>
           <path
             d={`M765 140 Q850 90 955 155 L965 ${height - 155} Q855 ${height - 60} 765 ${height - 150} Q735 ${height / 2} 765 140Z`}
             fill="#e8f1fc"
@@ -242,7 +244,36 @@ export function DeliveryMap({
               }
             />
           );
-        const active = frame.parents[edge.target] === edge.source;
+        const active =
+          frame.parents[edge.target] === edge.source ||
+          (!trace.graph.directed && frame.parents[edge.source] === edge.target);
+        const selected = route?.some(
+          (node, at) =>
+            at > 0 &&
+            ((route[at - 1] === edge.source && node === edge.target) ||
+              (!trace.graph.directed &&
+                route[at - 1] === edge.target &&
+                node === edge.source)),
+        );
+        const t = 0.57;
+        const control = {
+          x: (a.x + b.x) / 2,
+          y: (a.y + b.y) / 2 + (i % 2 ? 23 : -20),
+        };
+        const arrow = {
+          x: (1 - t) ** 2 * a.x + 2 * (1 - t) * t * control.x + t * t * b.x,
+          y:
+            (1 - t) ** 2 * (a.y + 26) +
+            2 * (1 - t) * t * control.y +
+            t * t * (b.y + 26),
+        };
+        const angle =
+          (Math.atan2(
+            (1 - t) * (control.y - a.y - 26) + t * (b.y + 26 - control.y),
+            (1 - t) * (control.x - a.x) + t * (b.x - control.x),
+          ) *
+            180) /
+          Math.PI;
         return (
           <g key={i}>
             <path
@@ -253,14 +284,25 @@ export function DeliveryMap({
             />
             <path
               d={`M${a.x} ${a.y + 26} Q${(a.x + b.x) / 2} ${(a.y + b.y) / 2 + (i % 2 ? 23 : -20)} ${b.x} ${b.y + 26}`}
-              stroke={active ? "#496fc7" : "#acb6c7"}
-              strokeWidth="1.8"
-              strokeDasharray="5 7"
+              stroke={selected ? "#3865df" : active ? "#8da9e7" : "#acb6c7"}
+              strokeWidth={selected ? 3 : 1.8}
+              strokeDasharray={selected ? undefined : "5 7"}
               fill="none"
               markerEnd={
                 trace.graph.directed ? `url(#road-arrow-${marker})` : undefined
               }
             />
+            {trace.graph.directed && (
+              <path
+                d="M-5-5 2 0-5 5"
+                transform={`translate(${arrow.x},${arrow.y}) rotate(${angle})`}
+                fill="none"
+                stroke={selected ? "#3865df" : "#7e8fa9"}
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
           </g>
         );
       })}
@@ -328,7 +370,7 @@ export function DeliveryMap({
               textAnchor="middle"
               className={styles.destinationLabel}
             >
-              {node}
+              {node.length > 6 ? `${node.slice(0, 5)}…` : node}
             </text>
             <text
               y="105"
@@ -348,7 +390,7 @@ export function DeliveryMap({
           </g>
         );
       })}
-      <g transform="translate(36 24)">
+      <g transform="translate(36 24)" className={styles.roadLegend}>
         <circle r="4" fill="#3865df" />
         <text x="14" y="5" className={styles.mapNote}>
           {trace.graph.directed ? "One-way roads" : "Two-way roads"} · one road
