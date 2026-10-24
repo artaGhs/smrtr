@@ -224,6 +224,7 @@ export const GenerationEventSchema = z.discriminatedUnion("type", [
 ]);
 export type GenerationEvent = z.infer<typeof GenerationEventSchema>;
 export const ChatRequestSchema = z.object({
+  learnerProfile: LearnerProfileSchema.optional(),
   id: z.string(),
   status: z.enum(["waiting", "completed", "error"]),
   createdAt: z.string(),
@@ -302,6 +303,7 @@ export type LearningCanvasProps = {
   onSelectConcept: (id: string) => void;
   onOpenConcept: (id: string) => void;
   pageScene?: PageScene;
+  pageKind?: LessonPage["kind"];
   activityConceptId?: string | null;
   simulations?: SimulationStates;
   onSimulationChange?: (
