@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, ArrowUpRight, FileText, RotateCcw } from "lucide-react";
 import type { Concept, Question, StudyWorkspaceProps } from "@/lib/contracts";
 import { getVerifiedResources } from "@/lib/teaching/resources";
+import { getTeachingSequence } from "@/lib/teaching/sequence";
 import { ActivityView } from "../activities/ActivityView";
 import { QuestionView } from "../activities/QuestionView";
 import { SourcePassages } from "./SourcePassages";
@@ -18,7 +19,8 @@ export function LearningDetail({ session, concept, view, onSelectConcept, onShow
   const module = lesson.modules.find((item) => item.conceptId === concept.id);
   const attempts = session.attempts.filter((attempt) => attempt.lessonId === lesson.id && attempt.revision === lesson.revision);
   const latest = new Map(attempts.map((attempt) => [attempt.questionId, attempt]));
-  const pathIndex = lesson.path.indexOf(concept.id);
+  const path = getTeachingSequence(lesson).map((step) => step.conceptId);
+  const pathIndex = path.indexOf(concept.id);
   const related = lesson.relations.filter((relation) => relation.source === concept.id || relation.target === concept.id);
   const resources = getVerifiedResources(lesson, concept.id);
   function questionView(question: Question) {
@@ -38,6 +40,6 @@ export function LearningDetail({ session, concept, view, onSelectConcept, onShow
       const label = relation.type === "prerequisite" ? relation.target === concept.id ? "Builds on" : "Prepares you for" : relation.type === "contrast" ? "Compare with" : relation.type === "example" ? relation.target === concept.id ? "Example of" : "See an example" : "Related idea";
       return other ? <button key={relation.id} onClick={() => onSelectConcept(other.id)}><span>{label}</span><strong>{other.title}</strong><ArrowUpRight size={13} /></button> : null;
     })}</div><button className="source-link" onClick={() => onShowView("sources")}><FileText size={13} />Read the source passages<ArrowUpRight size={13} /></button>{resources.length > 0 && <section className="further-learning"><span className="eyebrow">FURTHER LEARNING</span>{resources.map((resource) => <div key={resource.url}><a href={resource.url} target="_blank" rel="noopener noreferrer">{resource.title}<ArrowUpRight size={13} /></a><span>{resource.publisher} · video</span><a className="publisher-link" href={resource.verificationUrl} target="_blank" rel="noopener noreferrer">Official course page<ArrowUpRight size={11} /></a></div>)}</section>}</div>
-    <footer className="lesson-footer"><button className="secondary-button" disabled={pathIndex <= 0} onClick={() => onSelectConcept(lesson.path[pathIndex - 1])}><ArrowLeft size={14} />Previous</button><button className="primary-button" onClick={() => pathIndex >= 0 && pathIndex < lesson.path.length - 1 ? onSelectConcept(lesson.path[pathIndex + 1]) : onShowView("practice")}>{pathIndex >= 0 && pathIndex < lesson.path.length - 1 ? "Next concept" : "Final practice"}<ArrowRight size={14} /></button></footer>
+    <footer className="lesson-footer"><button className="secondary-button" disabled={pathIndex <= 0} onClick={() => onSelectConcept(path[pathIndex - 1])}><ArrowLeft size={14} />Previous</button><button className="primary-button" onClick={() => pathIndex >= 0 && pathIndex < path.length - 1 ? onSelectConcept(path[pathIndex + 1]) : onShowView("practice")}>{pathIndex >= 0 && pathIndex < path.length - 1 ? "Next concept" : "Final practice"}<ArrowRight size={14} /></button></footer>
   </>;
 }

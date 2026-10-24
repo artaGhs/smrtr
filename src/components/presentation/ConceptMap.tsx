@@ -55,7 +55,7 @@ export function ConceptMap({ lesson, selectedConceptId, onSelectConcept, practic
     const directed = relation.type === "prerequisite" || relation.type === "example";
     // Edge labels compete with node text at overview scale. The legend and selected
     // concept's connection list explain semantics without obscuring the canvas.
-    return { id: relation.id, source: relation.source, target: relation.target, type: "smoothstep", animated: highlighted && relation.type === "prerequisite", style: { stroke: relationColor[relation.type], strokeWidth: highlighted ? 2 : 1.4, strokeDasharray: relation.type === "related" || relation.type === "contrast" ? "5 5" : relation.type === "example" ? "2 4" : undefined }, markerEnd: directed ? { type: MarkerType.ArrowClosed, color: relationColor[relation.type], width: 15, height: 15 } : undefined };
+    return { id: relation.id, source: relation.source, target: relation.target, type: "smoothstep", style: { stroke: relationColor[relation.type], strokeWidth: highlighted ? 2 : 1.4, strokeDasharray: relation.type === "related" || relation.type === "contrast" ? "5 5" : relation.type === "example" ? "2 4" : undefined }, markerEnd: directed ? { type: MarkerType.ArrowClosed, color: relationColor[relation.type], width: 15, height: 15 } : undefined };
   });
   useEffect(() => { if (instance) void instance.fitView({ padding: 0.18, duration: 250 }); }, [instance, overviewVersion, lesson.id, lesson.revision]);
 
