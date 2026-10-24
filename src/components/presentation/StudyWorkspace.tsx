@@ -35,21 +35,30 @@ function WorkspaceContent(props: StudyWorkspaceProps) {
   const generating = props.status === "generating";
   const inputLength = props.input.trim().length;
 
+  function revealDetail() {
+    requestAnimationFrame(() => {
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      detailRef.current?.scrollIntoView({ block: "start", behavior: reducedMotion ? "instant" : "smooth" });
+      detailRef.current?.focus({ preventScroll: true });
+    });
+  }
+
   function selectConcept(id: string, focusDetail = false) {
     props.onSelectConcept(id);
     setView("learn");
-    if (focusDetail) detailRef.current?.focus({ preventScroll: true });
+    if (focusDetail || window.matchMedia("(max-width: 850px)").matches) revealDetail();
   }
 
   function overview() {
     setOverviewVersion((value) => value + 1);
-    mapRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    mapRef.current?.scrollIntoView({ block: "start", behavior: reducedMotion ? "instant" : "smooth" });
     mapRef.current?.focus({ preventScroll: true });
   }
 
   function showView(next: DetailView) {
     setView(next);
-    detailRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    revealDetail();
   }
 
   function reviewLinks(question: Question) {
@@ -133,9 +142,9 @@ function WorkspaceContent(props: StudyWorkspaceProps) {
                   const label = relation.type === "prerequisite" ? relation.target === concept.id ? "Builds on" : "Prepares you for" : relation.type === "contrast" ? "Compare with" : relation.type === "example" ? relation.target === concept.id ? "Example of" : "See an example" : "Related idea";
                   return other ? <button key={relation.id} onClick={() => selectConcept(otherId, true)}><span>{label}</span><strong>{other.title}</strong><ArrowUpRight size={14} /></button> : null;
                 }) : <p>Use the guided path to explore the next idea.</p>}</div>
-                <button className="source-link" onClick={() => setView("sources")}><FileText size={14} />Read the supporting source passages<ArrowUpRight size={14} /></button>
+                <button className="source-link" onClick={() => showView("sources")}><FileText size={14} />Read the supporting source passages<ArrowUpRight size={14} /></button>
               </div>
-              <footer className="lesson-footer"><button className="secondary-button" disabled={pathIndex <= 0} onClick={() => selectConcept(path[pathIndex - 1], true)}><ArrowLeft size={14} />Previous</button><button className="primary-button" onClick={() => pathIndex >= 0 && pathIndex < path.length - 1 ? selectConcept(path[pathIndex + 1], true) : setView("practice")}>{pathIndex >= 0 && pathIndex < path.length - 1 ? "Next concept" : "Final practice"}<ArrowRight size={14} /></button></footer>
+              <footer className="lesson-footer"><button className="secondary-button" disabled={pathIndex <= 0} onClick={() => selectConcept(path[pathIndex - 1], true)}><ArrowLeft size={14} />Previous</button><button className="primary-button" onClick={() => pathIndex >= 0 && pathIndex < path.length - 1 ? selectConcept(path[pathIndex + 1], true) : showView("practice")}>{pathIndex >= 0 && pathIndex < path.length - 1 ? "Next concept" : "Final practice"}<ArrowRight size={14} /></button></footer>
             </>}
             {view === "sources" && <SourcePassages lesson={lesson} concept={concept} sourceIds={[...new Set([...concept.sourceIds, ...(module?.sourceIds ?? [])])]} onSelectConcept={(id) => selectConcept(id, true)} />}
             {view === "practice" && <div className="lesson-content practice-content"><span className="eyebrow">BRING IT TOGETHER</span><h2>Make it stick.</h2><p>Connect the ideas in this lesson. Each question links back to the concepts it uses.</p><div className="practice-status"><Layers size={16} /><span>{lesson.finalQuestions.filter((question) => latestAttempts.has(question.id)).length} of {lesson.finalQuestions.length} questions checked</span></div>{lesson.finalQuestions.length ? lesson.finalQuestions.map((question, index) => <div className="final-question" key={`${lesson.revision}:${question.id}`}><div className="final-question-header"><span>QUESTION {String(index + 1).padStart(2, "0")}</span><div>{question.conceptIds.map((id) => {
