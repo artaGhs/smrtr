@@ -6,7 +6,7 @@ export const PlanSchema = z.object({
   title: z.string().min(1).max(160),
   summary: z.string().min(1).max(1200),
   concepts: z.array(ConceptSchema).min(1).max(7),
-  relations: z.array(RelationSchema.extend({ meaning: z.string().min(8).max(500) })).max(30),
+  relations: z.array(RelationSchema.extend({ meaning: z.string().min(12).max(500) })).max(30),
   path: z.array(z.string()).min(1).max(7),
   teachingPlan: TeachingPlanSchema,
   learningDesign: LearningDesignSchema,
@@ -63,6 +63,7 @@ Create at most eighteen rich but bounded pages with one overview root, real pare
 The main page sequence contains every overview/core/transfer page once and no support pages, with specific purpose and whyNext transitions. Supply four confidence routes (new, recognize, explain, apply), containing existing main pages only. The new route follows the complete problem-to-transfer progression; experienced routes must change entry point, emphasis and work substantively rather than relabel the same novice tour. Use manual topic overrides to offer targeted support without forcing repeated basics.
 learnerProfile is immutable self-report, not a mastery diagnosis. Respect the overall confidence level and each topic override; null topic levels inherit overall. New learners need familiar language, small predictions and linked definitions before abstractions; recognize needs connections/mechanism; explain needs why/invariants/limits; apply needs transfer, decisions and assumptions with basics as optional detours. Never turn self-report or one missed answer into a proven mastery claim.
 Relations may be prerequisite, related, contrast, or example. A prerequisite goes from the earlier prerequisite to its dependent; never create prerequisite cycles.
+Give every relation an explanatory meaning of 12–500 characters: explain how the source helps understand the target in the continuing scenario, not merely the relationship type or "these concepts are related".
 Use prerequisite edges for actual dependencies, not merely to make the map look connected. Related/contrast/example edges may cycle.
 Content must fit the supplied topic, with no unrelated canned lesson. Never force a topic into breadth-first search.
 Activities are limited to concept step explanations or a real unweighted BFS graph, never executable code.
