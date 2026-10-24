@@ -30,3 +30,16 @@ A fresh five-concept DSA lesson was authored by this coding chat from explicitly
 Verified in the actual new lesson: queue [B,C,D] after expanding H and A; correct B prediction; server-computed unreachable-X question with specific feedback; exact-set multi-answer grading; review link back to the corresponding concept; original input provenance; reopening by local request URL; 390px mobile layout without horizontal overflow.
 
 Final checks: **48 app tests + 4 actual MCP protocol/CLI tests**, TypeScript and optimized production build passed. Default local server binds only to loopback. No global MCP configuration was changed and the current chat was not claimed to have auto-attached new tools. Supported integration is a compatible local stdio MCP host, this coding chat's CLI, or browser JSON import.
+
+## Canvas redesign from user feedback
+
+- `996422b`, `0b77d1f` — a concrete opening question, big picture and purposeful teaching sequence are separate from prerequisite order and the relationship graph. New provider plans must supply this strategy; older lessons remain compatible.
+- `89f8a57`, `0974e7d` — full-screen neutral/blue canvas, minimal floating controls, simple empty topic/notes entry, dismissible right inspector, secondary Connections view and compact teaching navigation.
+- `6f169ea`, `28711e3`, `076fb62`, `b933a46` — input-driven illustrated BFS teaching scenes: buildings and one-way roads, a physical FIFO parcel conveyor, discovery marks, distance layers and unreachable islands. Playback, predictions, destination inspection and graph experiments use the same tested trace. Stable dimensions and explicit viewport focus prevent blank or misframed scenes; mobile has native 44px playback controls.
+- `3d81ac6` — inspector-only teaching/activity tags. Original sources, explanations, checked questions, review links and curated verified MIT further learning remain separate.
+
+A fresh browser completed the redesigned flow with empty notes, an actual waiting chat request, full chat-authored JSON import, server validation and automatic entry into the visual lesson with the inspector closed. The demonstration input remains explicitly labeled as an authored example, not a user lecture. Its teaching sequence opens with the delivery problem before graph, queue, discovery and route concepts.
+
+Actual browser checks: persistent visible scenes, two expansions produce parcels B,C,D; changing scenes preserves graph state; selecting a concept opens the dismissible inspector; source excerpts remain exact; an incorrect computed final answer links back to the corresponding teaching scene; fresh entry/import works; desktop resize and 390px mobile layout work with no page overflow; current console has no errors or warnings.
+
+Final redesign validation: **66 app tests + 4 actual MCP protocol/CLI tests**, TypeScript and production build pass. Rich computed visual teaching currently covers BFS; other generated topics use their actual explanation steps and do not claim algorithm execution. Elaborate animation remains later scope. Blue/neutral theme tokens remain easy to refine after design references arrive.

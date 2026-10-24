@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  DEFAULT_LEARNER_PROFILE,
+  type LearnerProfile,
   type Attempt,
   type ChatRequest,
   type Evaluation,
@@ -25,6 +27,9 @@ import {
 } from "./chat-bridge";
 
 export function useStudySession(): StudyWorkspaceProps {
+  const [learnerProfile, onLearnerProfileChange] = useState<LearnerProfile>(
+    DEFAULT_LEARNER_PROFILE,
+  );
   const [lesson, setLesson] = useState(sampleLesson);
   const [selectedConceptId, onSelectConcept] = useState(
     getTeachingSequence(sampleLesson)[0].conceptId,
@@ -220,6 +225,8 @@ export function useStudySession(): StudyWorkspaceProps {
       ].slice(-1000),
     );
   return {
+    learnerProfile,
+    onLearnerProfileChange,
     lesson,
     selectedConceptId,
     onSelectConcept,

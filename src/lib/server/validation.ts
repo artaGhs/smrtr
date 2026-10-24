@@ -21,6 +21,15 @@ export function validateLesson(candidate: unknown, originalText: string, partial
   check(lesson.concepts.length <= 7, "at most seven concepts");
   unique([...lesson.concepts, ...lesson.relations, ...lesson.modules, ...lesson.modules.flatMap((m) => m.questions), ...lesson.finalQuestions].map((item) => item.id), "entity IDs");
   const concepts = new Set(lesson.concepts.map((concept) => concept.id));
+  if (lesson.teachingPlan) {
+    const teaching = lesson.teachingPlan;
+    const useful = (value: string, min: number, max: number) => value.trim().length >= min && value.length <= max && /\p{L}/u.test(value);
+    check(useful(teaching.openingQuestion, 12, 600), "teaching opening question must be meaningful and bounded");
+    check(useful(teaching.bigPicture, 24, 1800), "teaching big picture must explain the learning purpose");
+    unique(teaching.sequence.map((step) => step.conceptId), "teaching sequence concepts");
+    check(teaching.sequence.length === concepts.size && teaching.sequence.every((step) => concepts.has(step.conceptId)), "teaching sequence must include each existing concept exactly once");
+    teaching.sequence.forEach((step) => check(useful(step.purpose, 12, 1000), "each teaching step needs a meaningful bounded purpose"));
+  }
   const support = (ids: string[]) => ids.length === 1 && ids[0] === SOURCE_ID;
   lesson.concepts.forEach((concept) => {
     check([concept.id, concept.title, concept.summary, concept.objective].every(present), "concept fields must contain useful text");
@@ -71,7 +80,7 @@ export function validateLesson(candidate: unknown, originalText: string, partial
   });
   lesson.finalQuestions.forEach((question) => checkQuestion(question));
   // Source text may contain unverified URLs; generated content must not invent links.
-  const authored = JSON.stringify({ concepts: lesson.concepts, modules: lesson.modules, finalQuestions: lesson.finalQuestions, title: lesson.title, summary: lesson.summary });
+  const authored = JSON.stringify({ concepts: lesson.concepts, modules: lesson.modules, finalQuestions: lesson.finalQuestions, title: lesson.title, summary: lesson.summary, teachingPlan: lesson.teachingPlan });
   check(!/https?:\/\//i.test(authored), "generated content must not introduce unverified URLs");
   if (issues.length) throw new LessonValidationError(issues.slice(0, 15));
   return lesson;

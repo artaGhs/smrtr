@@ -7,8 +7,8 @@ import {
   Controls,
   ReactFlow,
   ReactFlowProvider,
-  useNodesInitialized,
   useReactFlow,
+  useStore,
   type Node,
   type NodeProps,
 } from "@xyflow/react";
@@ -22,9 +22,12 @@ import {
 } from "../../lib/simulation/bfs";
 import {
   buildCanvasScenes,
+  defaultRouteTarget,
   experimentGraph,
   lessonBfsActivity,
+  knownDistance,
   safeBfsTrace,
+  teachingViewport,
   type CanvasScene,
 } from "./scene-model";
 import { Conveyor, DeliveryMap, Parcel } from "./Illustrations";
@@ -44,15 +47,10 @@ type SceneData = Record<string, unknown> & {
   onDirected: (value: boolean) => void;
   onVariant: (value: string) => void;
   openingQuestion: string;
+  mobile: boolean;
 };
 type TeachingNode = Node<SceneData, "teaching">;
 const nodeTypes = { teaching: TeachingScene };
-const focusPadding = {
-  top: "90px",
-  bottom: "110px",
-  left: "45px",
-  right: "45px",
-} as const;
 
 export function LearningCanvas(props: LearningCanvasProps) {
   return (
@@ -64,74 +62,121 @@ export function LearningCanvas(props: LearningCanvasProps) {
     </ReactFlowProvider>
   );
 }
+type SimulationState = {
+  start: string;
+  directed: boolean;
+  variant: string;
+  step: number;
+  target: string;
+};
 function CanvasBoard(props: LearningCanvasProps) {
   const scenes = useMemo(() => buildCanvasScenes(props.lesson), [props.lesson]);
   const initial = useMemo(
     () => lessonBfsActivity(props.lesson),
     [props.lesson],
   );
-  const [start, setStart] = useState(initial?.start ?? "");
-  const [directed, setDirected] = useState(initial?.directed ?? true);
-  const [variant, setVariant] = useState("original");
-  const [step, setStep] = useState(0);
-  const [target, setTarget] = useState(initial?.nodes.at(-1) ?? "");
-  const graph = useMemo(
-    () => (initial ? experimentGraph(initial, start, directed, variant) : null),
-    [initial, start, directed, variant],
+  const teaching = useMemo(() => getTeachingPlan(props.lesson), [props.lesson]);
+  const [configurations, setConfigurations] = useState<
+    Record<string, SimulationState>
+  >({});
+  const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
+  const mobile = width > 0 && width < 700;
+  const nodes = useMemo<TeachingNode[]>(
+    () =>
+      scenes.map((scene) => {
+        const activity =
+          scene.module?.activity.kind === "bfs"
+            ? scene.module.activity
+            : initial;
+        const signature = activity ? JSON.stringify(activity) : "none";
+        const original = safeBfsTrace(activity);
+        const defaults: SimulationState = {
+          start: activity?.start ?? "",
+          directed: activity?.directed ?? true,
+          variant: "original",
+          step: 0,
+          target: original ? defaultRouteTarget(original) : "",
+        };
+        const configuration = configurations[signature] ?? defaults;
+        const graph = activity
+          ? experimentGraph(
+              activity,
+              configuration.start,
+              configuration.directed,
+              configuration.variant,
+            )
+          : null;
+        const trace = safeBfsTrace(graph);
+        const update = (patch: Partial<SimulationState>, reset = false) =>
+          setConfigurations((previous) => {
+            const next = { ...(previous[signature] ?? defaults), ...patch };
+            if (reset) {
+              next.step = 0;
+              const changed = activity
+                ? safeBfsTrace(
+                    experimentGraph(
+                      activity,
+                      next.start,
+                      next.directed,
+                      next.variant,
+                    ),
+                  )
+                : null;
+              next.target = changed
+                ? defaultRouteTarget(changed)
+                : defaults.target;
+            }
+            return { ...previous, [signature]: next };
+          });
+        return {
+          id: scene.id,
+          type: "teaching",
+          position: { x: scene.index * 1540, y: scene.index % 2 ? 70 : 0 },
+          width: mobile ? 620 : 1320,
+          height: mobile ? 1350 : 940,
+          draggable: false,
+          selectable: false,
+          focusable: false,
+          data: {
+            scene,
+            trace,
+            step: Math.min(configuration.step, (trace?.frames.length ?? 1) - 1),
+            target: configuration.target,
+            onStep: (step) => update({ step }),
+            onTarget: (target) => update({ target }),
+            onOpen: () => props.onOpenConcept(scene.concept.id),
+            graph,
+            variant: configuration.variant,
+            onStart: (start) => update({ start }, true),
+            onDirected: (directed) => update({ directed }, true),
+            onVariant: (variant) => update({ variant }, true),
+            openingQuestion: teaching.openingQuestion,
+            mobile,
+          },
+        };
+      }),
+    [
+      scenes,
+      initial,
+      configurations,
+      mobile,
+      props.onOpenConcept,
+      teaching.openingQuestion,
+    ],
   );
-  const trace = useMemo(() => safeBfsTrace(graph), [graph]);
-  const reset = () => {
-    setStep(0);
-    setTarget(initial?.nodes.at(-1) ?? "");
-  };
-  const teaching = getTeachingPlan(props.lesson);
-  const nodes: TeachingNode[] = scenes.map((scene) => ({
-    id: scene.id,
-    type: "teaching",
-    position: { x: scene.index * 1540, y: scene.index % 2 ? 70 : 0 },
-    draggable: false,
-    selectable: false,
-    focusable: false,
-    data: {
-      scene,
-      trace,
-      step: Math.min(step, (trace?.frames.length ?? 1) - 1),
-      target,
-      onStep: setStep,
-      onTarget: setTarget,
-      onOpen: () => props.onOpenConcept(scene.concept.id),
-      graph,
-      variant,
-      onStart: (node) => {
-        setStart(node);
-        reset();
-      },
-      onDirected: (value) => {
-        setDirected(value);
-        reset();
-      },
-      onVariant: (value) => {
-        setVariant(value);
-        reset();
-      },
-      openingQuestion: teaching.openingQuestion,
-    },
-  }));
-  const { fitView } = useReactFlow();
-  const ready = useNodesInitialized();
+  const { setViewport, viewportInitialized } = useReactFlow();
   const active = Math.max(
     0,
     Math.min(props.activeSceneIndex, scenes.length - 1),
   );
   useEffect(() => {
-    if (ready && scenes[active])
-      void fitView({
-        nodes: [{ id: scenes[active].id }],
-        padding: focusPadding,
-        duration: 0,
-        maxZoom: 1.1,
-      });
-  }, [active, ready, scenes, fitView]);
+    if (!viewportInitialized || !scenes[active] || !width || !height) return;
+    void setViewport(teachingViewport(active, width, height, mobile), {
+      duration: 0,
+    });
+  }, [active, viewportInitialized, scenes, setViewport, width, height, mobile]);
+  const activeData = nodes[active]?.data;
   return (
     <div className={styles.canvas} aria-label="Interactive teaching canvas">
       <ReactFlow<TeachingNode>
@@ -143,15 +188,9 @@ function CanvasBoard(props: LearningCanvasProps) {
         zoomOnDoubleClick={false}
         panOnScroll
         selectionOnDrag={false}
-        proOptions={{ hideAttribution: false }}
         onNodeClick={(_, node) => {
           props.onSelectConcept(node.data.scene.concept.id);
           props.onSceneChange(node.data.scene.index);
-        }}
-        fitView
-        fitViewOptions={{
-          nodes: scenes[active] ? [{ id: scenes[active].id }] : [],
-          padding: focusPadding,
         }}
       >
         <Background
@@ -164,12 +203,9 @@ function CanvasBoard(props: LearningCanvasProps) {
           position="bottom-left"
           showInteractive={false}
           onFitView={() => {
-            if (scenes[active])
-              void fitView({
-                nodes: [{ id: scenes[active].id }],
-                padding: focusPadding,
-                duration: 0,
-              });
+            void setViewport(teachingViewport(active, width, height, mobile), {
+              duration: 0,
+            });
           }}
         />
       </ReactFlow>
@@ -177,6 +213,43 @@ function CanvasBoard(props: LearningCanvasProps) {
         Drag to explore <span>·</span> Scroll to pan <span>·</span> Pinch to
         zoom
       </div>
+      {mobile && activeData?.trace && activeData.scene.family !== "concept" && (
+        <div
+          className={styles.mobilePlayback}
+          role="group"
+          aria-label="Mobile simulation controls"
+        >
+          <span className={styles.mobilePanHint}>
+            Pan down to predict · Pinch to zoom
+          </span>
+          <button
+            type="button"
+            aria-label="Replay canvas BFS"
+            disabled={activeData.step === 0}
+            onClick={() => activeData.onStep(0)}
+          >
+            ↺
+          </button>
+          <div aria-live="polite">
+            <span>
+              EXPANSION {activeData.step} / {activeData.trace.frames.length - 1}
+            </span>
+            <strong>
+              Queue:{" "}
+              {activeData.trace.frames[activeData.step].queue.join(", ") ||
+                "empty"}
+            </strong>
+          </div>
+          <button
+            type="button"
+            disabled={activeData.trace.frames[activeData.step].complete}
+            onClick={() => activeData.onStep(activeData.step + 1)}
+            aria-label="Next canvas BFS step"
+          >
+            Next →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -186,7 +259,7 @@ function TeachingScene({ data }: NodeProps<TeachingNode>) {
   const isBfs = scene.family !== "concept" && trace && graph;
   return (
     <section
-      className={`${styles.scene} ${scene.family === "queue" ? styles.queueScene : ""}`}
+      className={`${styles.scene} ${scene.family === "queue" ? styles.queueScene : ""} ${data.mobile ? styles.mobileScene : ""}`}
       aria-label={`Teaching scene: ${scene.concept.title}`}
     >
       <header className={styles.sceneHeader}>
@@ -349,8 +422,10 @@ function BfsScene({ data, trace }: { data: SceneData; trace: BfsTrace }) {
                 ? "No route from this start."
                 : "Not discovered yet.")}
           </p>
-          {frame.distances[target] !== undefined && (
-            <small>{frame.distances[target]} edges · unweighted graph</small>
+          {knownDistance(frame, target) !== undefined && (
+            <small>
+              {knownDistance(frame, target)} edges · unweighted graph
+            </small>
           )}
         </div>
       </aside>
@@ -466,36 +541,38 @@ function ConceptScene({ scene }: { scene: CanvasScene }) {
       : [{ title: scene.concept.title, body: scene.concept.summary }];
   const [active, setActive] = useState(0);
   const step = steps[active] ?? steps[0];
+  const points = steps.map((_, i) => ({
+    x: steps.length === 1 ? 375 : 85 + (i * 580) / (steps.length - 1),
+    y: 210 + Math.sin(i * 1.8) * 90,
+  }));
+  const stepPath = points
+    .map((point, i) => `${i ? "L" : "M"}${point.x} ${point.y}`)
+    .join(" ");
   return (
     <div className={styles.conceptBody}>
       <div className={styles.conceptOrbit} aria-hidden="true">
         <svg viewBox="0 0 750 420">
           <path
-            d="M90 280C180 280 130 130 260 130S400 310 510 260s75-125 165-125"
+            d={stepPath}
             fill="none"
             stroke="#cbd6ee"
             strokeWidth="3"
             strokeDasharray="9 9"
           />
-          {[
-            [90, 280],
-            [260, 130],
-            [510, 260],
-            [675, 135],
-          ].map(([x, y], i) => (
+          {points.map(({ x, y }, i) => (
             <g key={i} transform={`translate(${x},${y})`}>
               <circle
-                r={i === active % 4 ? 47 : 33}
+                r={i === active ? 47 : 33}
                 fill={
-                  i === active % 4
+                  i === active
                     ? "#3865df"
-                    : ["#f7e7ce", "#e5dff3", "#f7ddd5", "#e0e8f8"][i]
+                    : ["#f7e7ce", "#e5dff3", "#f7ddd5", "#e0e8f8"][i % 4]
                 }
               />
               <text
                 textAnchor="middle"
                 y="9"
-                fill={i === active % 4 ? "white" : "#68768e"}
+                fill={i === active ? "white" : "#68768e"}
                 fontSize="25"
               >
                 {String(i + 1).padStart(2, "0")}
@@ -509,15 +586,14 @@ function ConceptScene({ scene }: { scene: CanvasScene }) {
       </div>
       <div
         className={`nodrag nopan ${styles.conceptSteps}`}
-        role="tablist"
+        role="group"
         aria-label="Explanation steps"
       >
         {steps.map((item, i) => (
           <button
             type="button"
             key={i}
-            role="tab"
-            aria-selected={active === i}
+            aria-pressed={active === i}
             onClick={() => setActive(i)}
           >
             <span>{String(i + 1).padStart(2, "0")}</span>

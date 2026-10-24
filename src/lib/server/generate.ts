@@ -71,7 +71,7 @@ export async function generateLesson(input: unknown, options: Options = {}) {
       }
       throw new GenerationError("GENERATION_FAILED", "Could not create a valid lesson.");
     }
-    const result = await stage(PlanResultSchema, "study_plan", "First create a compact conceptual plan only: 3–6 concepts where useful, typed connections and a valid learning path. No module content yet. If insufficient, plan must be null and reason should tell the learner what material to provide. If ready, plan must be present.", 3000, (value) => {
+    const result = await stage(PlanResultSchema, "study_plan", "First create a compact conceptual and teaching plan: 3–6 concepts where useful, typed connections, a valid prerequisite path, and required teachingPlan. Begin teaching with a concrete example or visual big-picture situation, an accessible opening question, then reveal the underlying abstractions. Give each concept a deliberate example/visual/explanation/practice approach and a specific learner purpose. Teaching sequence is independent from prerequisite path and may introduce an application before explaining its underlying mechanism. No module content yet. If insufficient, plan must be null and reason should tell the learner what material to provide. If ready, plan must be present.", 3800, (value) => {
       if (value.status === "insufficient") {
         if (value.plan !== null) throw new LessonValidationError(["insufficient result must have null plan"]);
         return;
@@ -82,14 +82,18 @@ export async function generateLesson(input: unknown, options: Options = {}) {
     if (result.status === "insufficient" || !result.plan) throw new GenerationError("INSUFFICIENT_INPUT", "The input did not identify enough study material. Add a concrete educational topic or a paragraph of notes.", 422);
     const plan = validateLesson({ ...base, ...result.plan, modules: [], finalQuestions: [] }, originalText, true);
     publish({ type: "plan", requestId, lesson: plan });
+    const teachingSequence = result.plan.teachingPlan.sequence;
+    const teachingOrder = teachingSequence.map((step) => step.conceptId);
     const modules = new Map<string, Lesson["modules"][number]>();
     const computedFinal = new Map<string, Question>();
     let cursor = 0;
     async function worker() {
-      while (cursor < plan.path.length) {
-        const conceptId = plan.path[cursor++];
+      while (cursor < teachingSequence.length) {
+        const teachingPosition = cursor++;
+        const teachingStep = teachingSequence[teachingPosition];
+        const conceptId = teachingStep.conceptId;
         let validatedModule: Lesson["modules"][number] | undefined;
-        await stage(ModuleResultSchema, "study_module", `Teach only targetConceptId from the validated plan. Preserve its concept ID and sourceIds ["source-input"]. Use module ID "module-${conceptId}" and question IDs prefixed "question-${conceptId}-" to avoid collisions with other independent modules. Give 1–3 concise explanatory paragraphs, a clearly labeled generated example, one activity, and 1–2 precise questions. Concept activities should have 3–5 meaningful reveal steps. Use BFS activity only for the concept that directly teaches the BFS algorithm; otherwise use conceptual activities. The server replaces any BFS module example and questions with computed graph practice. All other questions must be conceptual, never calculated BFS trace or path questions.`, 3200, (value) => {
+        await stage(ModuleResultSchema, "study_module", `Teach only targetConceptId using teachingStep.approach and teachingStep.purpose. This is teaching step ${teachingPosition + 1} of ${teachingSequence.length}, independent of the prerequisite path. Connect it to the plan's openingQuestion and bigPicture. If approach is example, begin with a concrete worked situation and a prediction before naming abstractions. If visual, use activity steps to expose changes, comparisons or relationships the learner can observe. If explanation, derive the mechanism from the concrete intuition already introduced. If practice, ask the learner to apply or retrieve an idea and then explain the feedback. Make this choice change the actual lesson content, not just its label. Preserve its concept ID and sourceIds ["source-input"]. Use module ID "module-${conceptId}" and question IDs prefixed "question-${conceptId}-" to avoid collisions with other independent modules. Give a concise explanation, a clearly labeled generated example, one activity with 3–5 purposeful prediction/observation/reveal steps, and 1–2 precise questions. Use BFS activity only for the concept that directly teaches the BFS algorithm; otherwise use conceptual activities. The server replaces any BFS module example and questions with computed graph practice. All other questions must be conceptual, never calculated BFS trace or path questions.`, 3200, (value) => {
           let module = value.module;
           let distanceQuestion: Question | undefined;
           if (module.conceptId !== conceptId || module.id !== `module-${conceptId}`) throw new LessonValidationError(["module must match targetConceptId and required module ID"]);
@@ -106,17 +110,17 @@ export async function generateLesson(input: unknown, options: Options = {}) {
           validatedModule = module;
           modules.set(conceptId, module);
           if (distanceQuestion) computedFinal.set(conceptId, distanceQuestion);
-        }, { targetConceptId: conceptId, plan: result.plan });
+        }, { targetConceptId: conceptId, teachingStep, teachingPosition, plan: result.plan });
         if (!validatedModule) throw new GenerationError("GENERATION_FAILED", "Could not complete a lesson module.");
         publish({ type: "module", requestId, module: validatedModule });
       }
     }
-    await Promise.all(Array.from({ length: Math.min(3, plan.path.length) }, () => worker()));
-    const orderedModules = plan.path.map((id) => modules.get(id)!);
+    await Promise.all(Array.from({ length: Math.min(3, teachingSequence.length) }, () => worker()));
+    const orderedModules = teachingOrder.map((id) => modules.get(id)!);
     // Final practice reuses validated, input-specific retrieval questions. BFS adds
     // a fresh computed distance task rather than trusting a generated answer key.
     const retrieval = orderedModules.flatMap((module) => module.questions.slice(0, 1).map((question) => ({ ...question, id: `final-${question.id}` })));
-    const verifiedBfsFinal = plan.path.flatMap((id) => computedFinal.has(id) ? [computedFinal.get(id)!] : []);
+    const verifiedBfsFinal = teachingOrder.flatMap((id) => computedFinal.has(id) ? [computedFinal.get(id)!] : []);
     const complete = validateLesson({ ...plan, modules: orderedModules, finalQuestions: [...verifiedBfsFinal, ...retrieval].slice(0, 5) }, originalText);
     publish({ type: "complete", requestId, lesson: complete });
     return GenerationResponseSchema.parse({ requestId, lesson: complete });
