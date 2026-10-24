@@ -10,18 +10,19 @@ function externalLocator(locator?: string) {
   } catch { return null; }
 }
 
-export function SourcePassages({ lesson, concept, sourceIds, onSelectConcept }: {
+export function SourcePassages({ lesson, concept, sourceIds, onSelectConcept, contextTitle }: {
   lesson: Lesson;
   concept: Concept;
   sourceIds: string[];
   onSelectConcept: (id: string) => void;
+  contextTitle?: string;
 }) {
   const [showAll, setShowAll] = useState(false);
   const sources = showAll ? lesson.sources : lesson.sources.filter((source) => sourceIds.includes(source.id));
   return <div className="lesson-content sources-content">
     <span className="eyebrow">ORIGINAL MATERIAL</span><h2>Source passages.</h2>
     <p>Original source passages are kept separate from the lesson’s explanations and worked examples.</p>
-    <div className="source-scope"><span>{showAll ? "All lesson sources" : `Supporting ${concept.title}`}</span><button onClick={() => setShowAll(!showAll)}>{showAll ? "For this concept" : "Show all sources"}</button></div>
+    <div className="source-scope"><span>{showAll ? "All lesson sources" : `Supporting ${contextTitle ?? concept.title}`}</span><button onClick={() => setShowAll(!showAll)}>{showAll ? "Linked passages" : "Show all sources"}</button></div>
     {sources.length ? sources.map((source, index) => {
       const href = externalLocator(source.locator);
       const supported = lesson.concepts.filter((item) => item.sourceIds.includes(source.id) || lesson.modules.some((module) => module.conceptId === item.id && module.sourceIds.includes(source.id)));
