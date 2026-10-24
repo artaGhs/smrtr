@@ -94,6 +94,7 @@ export function useStudySession(): StudyWorkspaceProps {
           void cancelChatRequest(request.id).catch(() => undefined);
         return;
       }
+      if (request.learnerProfile) setLearnerProfile(request.learnerProfile);
       pendingChat.current = request.status === "waiting" ? request.id : null;
       setChatRequest(request);
       const url = new URL(window.location.href);
