@@ -15,6 +15,7 @@ import {
 import { getTeachingSequence } from "../teaching/sequence";
 import { sampleLesson, SAMPLE_INPUT } from "../fixtures/sample-lesson";
 import { generateLesson } from "./generate-lesson";
+import { useLearningNavigation } from "../learning/use-learning-navigation";
 import { RequestGate } from "./request-gate";
 import { readSession, saveSession } from "./storage";
 import {
@@ -27,10 +28,11 @@ import {
 } from "./chat-bridge";
 
 export function useStudySession(): StudyWorkspaceProps {
-  const [learnerProfile, onLearnerProfileChange] = useState<LearnerProfile>(
+  const [learnerProfile, setLearnerProfile] = useState<LearnerProfile>(
     DEFAULT_LEARNER_PROFILE,
   );
   const [lesson, setLesson] = useState(sampleLesson);
+  const learning = useLearningNavigation(lesson);
   const [selectedConceptId, onSelectConcept] = useState(
     getTeachingSequence(sampleLesson)[0].conceptId,
   );
@@ -66,6 +68,7 @@ export function useStudySession(): StudyWorkspaceProps {
     setStatus("idle");
   }, [restoreCompleted]);
   const applyCompleted = (result: Lesson) => {
+    if (result.learnerProfile) setLearnerProfile(result.learnerProfile);
     lastCompleteLesson.current = result;
     setLesson(result);
     onSelectConcept(getTeachingSequence(result)[0].conceptId);
@@ -80,7 +83,12 @@ export function useStudySession(): StudyWorkspaceProps {
     try {
       const request = existingId
         ? await getChatRequest(existingId, signal)
-        : await createChatRequest(id, input, signal);
+        : await createChatRequest(
+            id,
+            input,
+            signal,
+            structuredClone(learnerProfile),
+          );
       if (!gate.current.isCurrent(id)) {
         if (!existingId)
           void cancelChatRequest(request.id).catch(() => undefined);
@@ -123,6 +131,11 @@ export function useStudySession(): StudyWorkspaceProps {
       setInput(saved.input);
       setAttempts(saved.attempts);
       setGenerationMode(saved.generationMode ?? "chat");
+      setLearnerProfile(
+        saved.learnerProfile ??
+          saved.lesson.learnerProfile ??
+          DEFAULT_LEARNER_PROFILE,
+      );
       onSelectConcept(
         saved.lesson.concepts.some((c) => c.id === saved.selectedConceptId)
           ? saved.selectedConceptId
@@ -147,6 +160,7 @@ export function useStudySession(): StudyWorkspaceProps {
           selectedConceptId,
           attempts,
           generationMode,
+          learnerProfile,
           chatRequestId:
             chatRequest?.status === "waiting" ? chatRequest.id : undefined,
         });
@@ -160,6 +174,7 @@ export function useStudySession(): StudyWorkspaceProps {
     attempts,
     generationMode,
     chatRequest,
+    learnerProfile,
   ]);
   const onInputChange = (value: string) => {
     onCancel();
@@ -179,7 +194,11 @@ export function useStudySession(): StudyWorkspaceProps {
     let planShown = false;
     try {
       const result = await generateLesson(
-        { requestId, text: input },
+        {
+          requestId,
+          text: input,
+          learnerProfile: structuredClone(learnerProfile),
+        },
         signal,
         (partial) => {
           if (!gate.current.isCurrent(requestId)) return;
@@ -225,8 +244,13 @@ export function useStudySession(): StudyWorkspaceProps {
       ].slice(-1000),
     );
   return {
+    learning,
     learnerProfile,
-    onLearnerProfileChange,
+    onLearnerProfileChange: (profile) => {
+      onCancel();
+      setLearnerProfile(structuredClone(profile));
+      setError(null);
+    },
     lesson,
     selectedConceptId,
     onSelectConcept,
