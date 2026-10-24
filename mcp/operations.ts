@@ -36,9 +36,11 @@ export async function getLessonRequest(id: string) {
       410,
     );
   }
+  const generation = getChatGenerationInstructions(request);
   return {
-    ...getChatGenerationInstructions(request),
+    ...generation,
     request: {
+      ...generation.request,
       id: request.id,
       requestId: request.requestId,
       revision: request.revision,
