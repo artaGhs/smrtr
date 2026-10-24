@@ -23,6 +23,38 @@ export const sampleLesson = LessonSchema.parse({
   summary:
     "From a simple graph to a shortest path. Build your intuition, one connection at a time.",
   mode: "sample",
+  teachingPlan: {
+    openingQuestion: "Which route reaches T in the fewest hops?",
+    bigPicture:
+      "A small network. One starting point. Find a route, then uncover the rules that make the search work.",
+    sequence: [
+      {
+        conceptId: "bfs",
+        approach: "example",
+        purpose: "Try the route-finding problem before naming the rules.",
+      },
+      {
+        conceptId: "graphs",
+        approach: "visual",
+        purpose: "Read the directed connections and destinations.",
+      },
+      {
+        conceptId: "queue",
+        approach: "visual",
+        purpose: "See how a physical queue decides what happens next.",
+      },
+      {
+        conceptId: "visited",
+        approach: "explanation",
+        purpose: "Use discovery marks to prevent repeated work.",
+      },
+      {
+        conceptId: "paths",
+        approach: "practice",
+        purpose: "Connect distance layers with a fewest-edge route.",
+      },
+    ],
+  },
   sources: [
     { id: "source-1", title: "Sample study notes", text: SAMPLE_INPUT },
   ],
