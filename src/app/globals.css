@@ -258,3 +258,52 @@ a.source-locator { text-decoration: underline; text-underline-offset: 3px; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
   .react-flow__edge.animated path { animation: none !important; }
 }
+
+/* Chat handoff uses the same surface tokens as the learning workspace. */
+.generation-modes { display: flex; border: 1px solid var(--line); border-radius: 9px; padding: 3px; gap: 3px; margin: 14px 0 0; background: #f1f3e9; width: fit-content; max-width: 100%; }
+.generation-modes button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 11px; min-height: 35px; border-radius: 6px; font-size: 10px; color: var(--muted); }
+.generation-modes button.active { background: var(--surface); color: var(--deep); box-shadow: 0 1px 4px #374d2612; }
+.generation-modes button > span { background: #e8efda; color: #6a7b50; font-size: 8px; padding: 2px 5px; border-radius: 4px; }
+.mode-explanation { font-size: 10px; line-height: 1.7; color: var(--muted); margin: 9px 0 13px; }
+.chat-handoff { margin: 19px 0 0; padding: 17px; border: 1px solid #cfdbbd; border-radius: 10px; background: #f2f5e9; }
+.handoff-heading { display: flex; align-items: start; gap: 10px; }
+.handoff-icon { width: 31px; height: 31px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center; background: #e3edce; color: #667e49; }
+.handoff-heading > div { flex: 1; min-width: 0; }
+.handoff-heading strong { display: block; font-size: 12px; font-weight: 600; margin: 0 0 4px; }
+.handoff-heading > div > span { display: block; font-size: 10px; line-height: 1.65; color: var(--muted); }
+.handoff-heading > .spin { color: var(--muted); margin-top: 8px; }
+.request-reference { margin-top: 15px; border-top: 1px solid #dce4d0; padding-top: 13px; }
+.request-reference > span { display: block; font-size: 8px; letter-spacing: 1px; color: var(--muted); margin-bottom: 5px; }
+.request-reference code { display: block; font: 10px/1.6 ui-monospace, monospace; color: #5d704a; overflow-wrap: anywhere; user-select: all; }
+.handoff-steps { list-style: none; counter-reset: handoff; margin: 17px 0; padding: 0; }
+.handoff-steps li { position: relative; padding-left: 28px; margin-top: 13px; counter-increment: handoff; }
+.handoff-steps li::before { content: counter(handoff); position: absolute; left: 0; top: 1px; width: 18px; height: 18px; display: grid; place-items: center; border: 1px solid #cbd8b7; border-radius: 50%; font-size: 9px; color: #6c8052; }
+.handoff-steps strong, .handoff-steps li > span { display: block; font-size: 10px; line-height: 1.7; }
+.handoff-steps strong { font-weight: 500; color: var(--ink); }
+.handoff-steps li > span { color: var(--muted); font-size: 10px; margin-top: 2px; }
+.copy-request { background: var(--surface); min-height: 39px; font-size: 10px; }
+.mcp-guide, .import-details { border-top: 1px solid #dbe3cf; margin-top: 15px; padding-top: 13px; }
+.mcp-guide > summary, .import-details > summary { cursor: pointer; display: flex; gap: 7px; align-items: center; font-size: 10px; line-height: 1.7; color: #5e744a; min-height: 28px; }
+.mcp-guide > summary::-webkit-details-marker, .import-details > summary::-webkit-details-marker { display: none; }
+.mcp-guide > summary > svg:last-child, .import-details > summary > svg:last-child { margin-left: auto; }
+.mcp-guide[open] > summary > svg:last-child, .import-details[open] > summary > svg:last-child { transform: rotate(180deg); }
+.mcp-guide p { font-size: 10px; line-height: 1.8; color: var(--muted); margin: 10px 0 0; }
+.import-details form { margin-top: 13px; }
+.input-card .import-details label { font-size: 10px; margin: 0 0 7px; }
+.input-card .import-details textarea { display: block; border: 1px solid #d0dbbf; background: var(--surface); padding: 10px; font: 11px/1.6 ui-monospace, monospace; min-height: 130px; width: 100%; border-radius: 7px; color: var(--ink); }
+.import-details p { font-size: 9px; color: var(--muted); line-height: 1.8; margin: 8px 0 12px; }
+.import-details .primary-button { font-size: 10px; }
+.handoff-message { font-size: 10px; line-height: 1.8; color: #5b7249; border-left: 2px solid #aabd8d; padding-left: 10px; margin: 14px 0 0; overflow-wrap: anywhere; }
+.chat-complete { border-color: #becf9d; }
+.mcp-guide > summary:focus-visible, .import-details > summary:focus-visible, .source-passage blockquote:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 600px) {
+  .generation-modes { width: 100%; }
+  .generation-modes button { flex: 1; padding: 8px 6px; font-size: 10px; gap: 5px; }
+  .generation-modes button > span { font-size: 7px; }
+  .chat-handoff { padding: 14px; }
+  .input-card .import-details textarea { font-size: 16px; }
+  .copy-request, .import-details .primary-button { width: 100%; }
+}
+.mcp-guide p code { padding: 2px 4px; background: #e7eddb; border-radius: 3px; font-size: 10px; }
+.mcp-guide p a { display: inline; text-decoration: underline; text-underline-offset: 3px; }
+.mcp-guide p a svg { display: none; }
