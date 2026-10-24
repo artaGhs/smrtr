@@ -18,6 +18,7 @@ export const RelationSchema = z.object({
   source: z.string(),
   target: z.string(),
   type: z.enum(["prerequisite", "related", "contrast", "example"]),
+  meaning: z.string().optional(),
 });
 export const BfsActivitySchema = z.object({
   kind: z.literal("bfs"),
@@ -65,6 +66,114 @@ export const TeachingPlanSchema = z.object({
 });
 export type TeachingStep = z.infer<typeof TeachingStepSchema>;
 export type TeachingPlan = z.infer<typeof TeachingPlanSchema>;
+export const ConfidenceLevelSchema = z.enum([
+  "new",
+  "recognize",
+  "explain",
+  "apply",
+]);
+export type ConfidenceLevel = z.infer<typeof ConfidenceLevelSchema>;
+export const LearnerProfileSchema = z.object({
+  overall: ConfidenceLevelSchema,
+  topics: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(100),
+        label: z.string().trim().min(1).max(120),
+        level: ConfidenceLevelSchema.nullable(),
+      }),
+    )
+    .max(12),
+});
+export type LearnerProfile = z.infer<typeof LearnerProfileSchema>;
+export const DEFAULT_LEARNER_PROFILE: LearnerProfile = {
+  overall: "new",
+  topics: [],
+};
+export const PageSceneSchema = z.enum([
+  "scenario",
+  "layers",
+  "queue",
+  "discovery",
+  "route",
+  "explanation",
+  "none",
+]);
+export type PageScene = z.infer<typeof PageSceneSchema>;
+export const PageSegmentSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("text"), text: z.string() }),
+  z.object({
+    kind: z.literal("page-link"),
+    text: z.string(),
+    pageId: z.string(),
+    reason: z.string(),
+  }),
+]);
+export const LessonPageSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  question: z.string(),
+  purpose: z.string(),
+  kind: z.enum(["overview", "core", "support", "transfer"]),
+  parentId: z.string().nullable(),
+  conceptIds: z.array(z.string()),
+  sourceIds: z.array(z.string()),
+  topicIds: z.array(z.string()),
+  blocks: z
+    .array(
+      z.object({
+        id: z.string(),
+        kind: z.enum(["paragraph", "callout"]),
+        segments: z.array(PageSegmentSchema).min(1),
+      }),
+    )
+    .min(1),
+  scene: PageSceneSchema,
+  activityConceptId: z.string().nullable(),
+  recommendedNextPageId: z.string().nullable(),
+});
+export type LessonPage = z.infer<typeof LessonPageSchema>;
+export const LearningDesignSchema = z.object({
+  centralQuestion: z.string(),
+  objective: z.string(),
+  assumedKnowledge: z.array(z.string()),
+  scenario: z.object({
+    id: z.string(),
+    title: z.string(),
+    description: z.string(),
+    entities: z.array(
+      z.object({ id: z.string(), label: z.string(), role: z.string() }),
+    ),
+    activityConceptId: z.string().nullable(),
+    activity: ActivitySpecSchema.nullable(),
+  }),
+  pages: z.array(LessonPageSchema).min(1),
+  sequence: z
+    .array(
+      z.object({
+        pageId: z.string(),
+        purpose: z.string(),
+        whyNext: z.string(),
+      }),
+    )
+    .min(1),
+  routes: z.object({
+    new: z.array(z.string()).min(1),
+    recognize: z.array(z.string()).min(1),
+    explain: z.array(z.string()).min(1),
+    apply: z.array(z.string()).min(1),
+  }),
+});
+export type LearningDesign = z.infer<typeof LearningDesignSchema>;
+export type SimulationState = {
+  start: string;
+  directed: boolean;
+  variant: string;
+  step: number;
+  target: string;
+};
+export type SimulationStates = Record<string, SimulationState>;
+
 export const LessonSchema = z.object({
   id: z.string(),
   revision: z.string(),
@@ -79,10 +188,13 @@ export const LessonSchema = z.object({
   modules: z.array(LessonModuleSchema),
   teachingPlan: TeachingPlanSchema.optional(),
   finalQuestions: z.array(QuestionSchema),
+  learnerProfile: LearnerProfileSchema.optional(),
+  learningDesign: LearningDesignSchema.optional(),
 });
 export const GenerationRequestSchema = z.object({
   requestId: z.string(),
   text: z.string().trim().min(10).max(40000),
+  learnerProfile: LearnerProfileSchema.optional(),
 });
 export const GenerationResponseSchema = z.object({
   requestId: z.string(),
@@ -146,12 +258,20 @@ export type Evaluation = {
   feedback: string;
   reviewConceptIds: string[];
 };
-export type ActivityViewProps = { activity: ActivitySpec; conceptId: string };
+export type ActivityViewProps = {
+  activity: ActivitySpec;
+  conceptId: string;
+  simulation?: SimulationState;
+  onSimulationChange?: (state: SimulationState) => void;
+};
 export type QuestionViewProps = {
   question: Question;
   onAnswer: (selectedOptionIds: string[], evaluation: Evaluation) => void;
 };
 export type StudyWorkspaceProps = {
+  learnerProfile: LearnerProfile;
+  onLearnerProfileChange: (profile: LearnerProfile) => void;
+  learning?: LearningNavigationProps;
   generationMode: GenerationMode;
   onGenerationModeChange: (mode: GenerationMode) => void;
   chatRequest: ChatRequest | null;
@@ -181,6 +301,41 @@ export type LearningCanvasProps = {
   selectedConceptId: string;
   onSelectConcept: (id: string) => void;
   onOpenConcept: (id: string) => void;
+  pageScene?: PageScene;
+  activityConceptId?: string | null;
+  simulations?: SimulationStates;
+  onSimulationChange?: (
+    activityConceptId: string,
+    state: SimulationState,
+  ) => void;
   activeSceneIndex: number;
   onSceneChange: (index: number) => void;
+};
+
+export type PageLocation = {
+  pageId: string;
+  mainPageId: string;
+  sceneIndex: number;
+  scrollTop: number;
+  simulations: SimulationStates;
+};
+export type LearningNavigationProps = {
+  design: LearningDesign;
+  provenance: "authored" | "legacy";
+  page: LessonPage;
+  route: LessonPage[];
+  coreIndex: number;
+  breadcrumbs: LessonPage[];
+  canGoBack: boolean;
+  location: PageLocation;
+  simulations: SimulationStates;
+  onOpenPage: (pageId: string, scrollTop?: number) => void;
+  onBack: () => void;
+  onGoToCore: (index: number) => void;
+  onScroll: (scrollTop: number) => void;
+  onStartSimpler: () => void;
+  onSimulationChange: (
+    activityConceptId: string,
+    state: SimulationState,
+  ) => void;
 };
