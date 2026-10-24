@@ -8,6 +8,7 @@ import { LearningCanvas } from "@/components/canvas/LearningCanvas";
 import { ConceptMap } from "./ConceptMap";
 import { LearningDetail, type DetailView } from "./LearningDetail";
 import { NotesComposer } from "./NotesComposer";
+import { HierarchyLesson } from "./HierarchyLesson";
 
 export function StudyWorkspace(props: StudyWorkspaceProps) {
   return <CanvasWorkspace {...props} />;
@@ -85,7 +86,7 @@ function CanvasWorkspace(session: StudyWorkspaceProps) {
   return <main className={`canvas-workspace ${detailView ? "has-detail" : ""}`}>
     <a className="skip-link" href="#guided-sequence">Skip to guided sequence</a>
     <section className="canvas-stage" aria-label="Learning canvas">
-      {canvasMode === "lesson" ? <LearningCanvas key={`${lesson.id}:${lesson.revision}`} lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id, false)} onOpenConcept={(id) => selectConcept(id)} activeSceneIndex={activeSceneIndex} onSceneChange={(index) => goToStep(index)} /> : <ConceptMap lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id)} practiced={practiced} needsReview={needsReview} overviewVersion={overviewVersion} />}
+      {canvasMode === "lesson" && session.learning ? <HierarchyLesson session={session} learning={session.learning} onOpenConcept={(id) => selectConcept(id)} onOpenSources={() => openDetail("sources")} onOpenPractice={() => openDetail("practice")} /> : canvasMode === "lesson" ? <LearningCanvas key={`${lesson.id}:${lesson.revision}`} lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id, false)} onOpenConcept={(id) => selectConcept(id)} activeSceneIndex={activeSceneIndex} onSceneChange={(index) => goToStep(index)} /> : <ConceptMap lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id)} practiced={practiced} needsReview={needsReview} overviewVersion={overviewVersion} />}
     </section>
     <header className="canvas-header">
       <div className="canvas-identity"><button className="canvas-wordmark" onClick={() => setComposerOpen(true)} aria-label="SMRTR — open topic or notes">smrtr<span>↗</span></button><span className="header-divider" /><div className="canvas-document"><span className="canvas-document-title">{lesson.title}</span><span className="lesson-origin">{badge}</span></div></div>
@@ -97,14 +98,14 @@ function CanvasWorkspace(session: StudyWorkspaceProps) {
     </header>
     <div className="canvas-view-switch" role="group" aria-label="Canvas view"><button className={canvasMode === "lesson" ? "active" : ""} aria-pressed={canvasMode === "lesson"} onClick={() => setCanvasMode("lesson")}><Shapes size={14} />Visual lesson</button><button className={canvasMode === "map" ? "active" : ""} aria-pressed={canvasMode === "map"} onClick={() => { setCanvasMode("map"); setOverviewVersion((value) => value + 1); }}><MapIcon size={14} />Connections</button></div>
     {canvasMode === "map" && <div className="canvas-map-legend"><span><i />Prerequisite → next idea</span><span><i className="dashed" />Related</span><span>Click an idea to explore</span></div>}
-    <footer className="sequence-dock" id="guided-sequence" aria-label="Guided teaching sequence">
+    {!session.learning && <footer className="sequence-dock" id="guided-sequence" aria-label="Guided teaching sequence">
       {pathOpen && <div className="sequence-popover"><div className="sequence-popover-heading"><span>YOUR LEARNING SEQUENCE</span><button className="icon-button" onClick={() => setPathOpen(false)} aria-label="Close learning sequence"><X size={14} /></button></div>{sequence.map((step, index) => <button key={`${step.conceptId}:${index}`} className={index === activeSceneIndex ? "active" : ""} onClick={() => goToStep(index)}><span>{practiced.has(step.conceptId) ? <Check size={12} /> : String(index + 1).padStart(2, "0")}</span><div><strong>{lesson.concepts.find((item) => item.id === step.conceptId)?.title}</strong><small>{step.purpose}</small></div></button>)}<button onClick={() => openDetail("practice")}><span><Layers size={13} /></span><div><strong>Final practice</strong><small>Connect what you’ve learned</small></div></button></div>}
       <button className="sequence-arrow" disabled={activeSceneIndex === 0} onClick={() => goToStep(activeSceneIndex - 1)} aria-label="Previous scene"><ArrowLeft size={16} /></button>
       <button className="sequence-current" onClick={() => setPathOpen(!pathOpen)} aria-expanded={pathOpen}><span>STEP {String(activeSceneIndex + 1).padStart(2, "0")} OF {String(sequence.length).padStart(2, "0")}</span><strong>{currentTitle}</strong><ChevronDown size={14} /></button>
       <div className="sequence-dots" aria-label="Teaching steps">{sequence.map((step, index) => <button key={`${step.conceptId}:${index}`} className={index === activeSceneIndex ? "active" : ""} onClick={() => goToStep(index)} aria-label={`Step ${index + 1}: ${lesson.concepts.find((item) => item.id === step.conceptId)?.title}`} aria-current={index === activeSceneIndex ? "step" : undefined} />)}</div>
       <button className="sequence-inspect" onClick={() => { if (currentStep) selectConcept(currentStep.conceptId); }} aria-label="Open current concept details" title="Concept details"><BookOpen size={16} /></button>
       <button className="sequence-arrow sequence-next" onClick={() => activeSceneIndex < sequence.length - 1 ? goToStep(activeSceneIndex + 1) : openDetail("practice")} aria-label={activeSceneIndex < sequence.length - 1 ? "Next scene" : "Start final practice"}><ArrowRight size={16} /></button>
-    </footer>
+    </footer>}
     {detailView && <aside className="detail-drawer" aria-label="Learning detail" tabIndex={-1} ref={drawerRef}><div className="drawer-header"><nav aria-label="Learning views">{([['learn', 'Learn'], ['sources', 'Sources'], ['practice', 'Practice']] as const).map(([id, label]) => <button key={id} className={detailView === id ? "active" : ""} onClick={() => setDetailView(id)} aria-pressed={detailView === id}>{label}</button>)}</nav><button className="icon-button" onClick={closeDetail} aria-label="Close learning detail"><X size={17} /></button></div><div className="drawer-scroll"><LearningDetail session={session} concept={concept} view={detailView} onSelectConcept={(id) => selectConcept(id)} onShowView={setDetailView} /></div></aside>}
     {composerOpen && <CanvasDialog onClose={() => setComposerOpen(false)}><NotesComposer session={session} onExploreSample={() => {session.onLoadSample();setComposerOpen(false);}} /></CanvasDialog>}
   </main>;
