@@ -1,6 +1,10 @@
 import { useId } from "react";
 import { pathTo, type BfsFrame, type BfsTrace } from "../../lib/simulation/bfs";
-import { deliveryLayout, knownDistance } from "./scene-model";
+import {
+  deliveryLayout,
+  knownDistance,
+  type TeachingDisclosure,
+} from "./scene-model";
 import styles from "./canvas.module.css";
 
 export function Parcel({
@@ -135,8 +139,9 @@ function Building({ kind, color }: { kind: number; color: string }) {
 
 export function DeliveryMap({
   trace,
-  frame,
+  frame: suppliedFrame,
   focus,
+  disclosure = "mechanism",
   onInspect,
   target,
 }: {
@@ -145,9 +150,11 @@ export function DeliveryMap({
   focus: string;
   onInspect: (node: string) => void;
   target: string;
+  disclosure?: TeachingDisclosure;
 }) {
   const { positions, layers, height, width, spacing, islandX } =
     deliveryLayout(trace);
+  const frame = disclosure === "problem" ? trace.frames[0] : suppliedFrame;
   const marker = useId().replace(/:/g, "");
   const route = pathTo(frame, target);
   return (
@@ -155,7 +162,13 @@ export function DeliveryMap({
       className={styles.deliveryMap}
       viewBox={`0 0 ${width} ${height}`}
       role="group"
-      aria-label="Delivery network. Buildings are graph nodes; every road is one unweighted edge. Select a destination to inspect its route."
+      aria-label={
+        disclosure === "problem"
+          ? `Delivery roads from start ${trace.graph.start} to destination ${target}. Every road counts as one hop. Follow the arrows.`
+          : disclosure === "intuition"
+            ? `Explore outward from ${trace.graph.start}. Each road counts as one hop; reached places are highlighted.`
+            : "Delivery network. Buildings are graph nodes; every road is one unweighted edge. Select a destination to inspect its route."
+      }
     >
       <defs>
         <marker
@@ -190,7 +203,9 @@ export function DeliveryMap({
             >
               {layer === 0
                 ? "START"
-                : `${layer} ${layer === 1 ? "EDGE" : "EDGES"}`}
+                : disclosure === "intuition"
+                  ? `${layer} ${layer === 1 ? "HOP" : "HOPS"}`
+                  : `${layer} ${layer === 1 ? "EDGE" : "EDGES"}`}
             </text>
           </g>
         ))}
@@ -218,7 +233,9 @@ export function DeliveryMap({
             textAnchor="middle"
             className={styles.islandLabel}
           >
-            UNREACHABLE ISLAND
+            {disclosure === "problem"
+              ? "NO CONNECTING ROAD"
+              : "UNREACHABLE ISLAND"}
           </text>
           <text
             x="853"
@@ -318,22 +335,60 @@ export function DeliveryMap({
               : discovered
                 ? "#c7d5fc"
                 : ["#f2e9de", "#e7ddf4", "#f9e3b7"][i % 3];
+        const caption =
+          disclosure === "problem"
+            ? node === trace.graph.start
+              ? "start"
+              : node === target
+                ? "destination"
+                : p.layer === null
+                  ? "no connecting road"
+                  : "not explored"
+            : disclosure === "intuition"
+              ? frame.current === node
+                ? "exploring now"
+                : expanded
+                  ? "✓ explored"
+                  : discovered
+                    ? node === trace.graph.start
+                      ? "start"
+                      : "reached"
+                    : p.layer === null
+                      ? "not connected"
+                      : "not explored"
+              : frame.current === node
+                ? "EXPANDING NOW"
+                : expanded
+                  ? "✓ expanded"
+                  : discovered
+                    ? "in the queue"
+                    : p.layer === null
+                      ? "not reachable"
+                      : "not discovered";
         return (
           <g
             key={node}
             transform={`translate(${p.x},${p.y})`}
-            role="button"
-            tabIndex={0}
-            aria-label={`Destination ${node}, ${expanded ? "expanded" : discovered ? "queued" : "unseen"}${knownDistance(frame, node) !== undefined ? `, ${knownDistance(frame, node)} edges from start` : ""}. Inspect route.`}
-            aria-pressed={target === node}
+            role={disclosure === "problem" ? undefined : "button"}
+            tabIndex={disclosure === "problem" ? undefined : 0}
+            aria-label={`Destination ${node}, ${caption}${disclosure === "problem" ? "" : knownDistance(frame, node) !== undefined ? `, ${knownDistance(frame, node)} ${disclosure === "intuition" ? "road hops" : "edges"} from start. Inspect route.` : ". Inspect route."}`}
+            aria-pressed={
+              disclosure === "problem" ? undefined : target === node
+            }
             className={styles.destination}
-            onClick={() => onInspect(node)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onInspect(node);
-              }
-            }}
+            onClick={
+              disclosure === "problem" ? undefined : () => onInspect(node)
+            }
+            onKeyDown={
+              disclosure === "problem"
+                ? undefined
+                : (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onInspect(node);
+                    }
+                  }
+            }
           >
             <ellipse
               cy="46"
@@ -377,15 +432,7 @@ export function DeliveryMap({
               textAnchor="middle"
               className={styles.destinationState}
             >
-              {frame.current === node
-                ? "EXPANDING NOW"
-                : expanded
-                  ? "✓ expanded"
-                  : discovered
-                    ? "in the queue"
-                    : p.layer === null
-                      ? "not reachable"
-                      : "not discovered"}
+              {caption}
             </text>
           </g>
         );
@@ -394,7 +441,7 @@ export function DeliveryMap({
         <circle r="4" fill="#3865df" />
         <text x="14" y="5" className={styles.mapNote}>
           {trace.graph.directed ? "One-way roads" : "Two-way roads"} · one road
-          = one edge
+          = {disclosure === "mechanism" ? "one edge" : "one hop"}
         </text>
       </g>
     </svg>

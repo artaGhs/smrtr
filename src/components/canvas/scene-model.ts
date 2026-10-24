@@ -4,6 +4,7 @@ import type {
   Lesson,
   LessonModule,
   PageScene,
+  LessonPage,
 } from "../../lib/contracts";
 import { getTeachingSequence } from "../../lib/teaching/sequence";
 import {
@@ -173,7 +174,29 @@ export function teachingViewport(
   height: number,
   mobile: boolean,
   pageScene?: PageScene,
+  pageKind?: LessonPage["kind"],
 ) {
+  if (pageKind === "overview" && pageScene !== undefined) {
+    const mapWidth = mobile ? 620 : 1000,
+      mapHeight = mobile ? 395 : 610,
+      mapTop = mobile ? 90 : 84;
+    const zoom = Math.max(
+      0.18,
+      Math.min(
+        (width - 24) / mapWidth,
+        (height - 20) / mapHeight,
+        mobile ? 0.72 : 1.1,
+      ),
+    );
+    return {
+      x: (width - mapWidth * zoom) / 2 - index * 1540 * zoom,
+      y:
+        (height - mapHeight * zoom) / 2 -
+        mapTop * zoom -
+        (index % 2 ? 70 : 0) * zoom,
+      zoom,
+    };
+  }
   if (pageScene !== undefined) {
     const zoom = mobile
       ? Math.max(0.18, Math.min(0.72, (width - 24) / 620))
@@ -233,4 +256,14 @@ export function pageCanvasScenes(
       index: 0,
     },
   ];
+}
+
+export type TeachingDisclosure = "problem" | "intuition" | "mechanism";
+export function teachingDisclosure(
+  pageScene?: PageScene,
+  pageKind?: LessonPage["kind"],
+): TeachingDisclosure {
+  if (pageScene !== undefined && pageKind === "overview") return "problem";
+  if (pageScene === "layers" && pageKind !== "transfer") return "intuition";
+  return "mechanism";
 }

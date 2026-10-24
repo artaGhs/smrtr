@@ -914,3 +914,29 @@
 .pageCanvas .canvasHint {
   display: none;
 }
+
+.problemScene .destination {
+  cursor: default;
+}
+.problemAssumptions {
+  position: absolute;
+  left: 40px;
+  top: 660px;
+  width: 940px;
+  margin: 0;
+  color: #7b8ba4;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.mobileScene .problemAssumptions {
+  left: 15px;
+  top: 455px;
+  width: 590px;
+  font-size: 18px;
+}
+.intuitionScene .playback {
+  top: 650px;
+}
+.intuitionScene .sceneFootnote {
+  top: 710px;
+}
