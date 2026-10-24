@@ -656,3 +656,229 @@
 .queueScene .conveyor > p {
   font-size: 13px;
 }
+/* Narrow canvases start with a stacked, readable scene. Pan down for extra notes. */
+.mobileScene {
+  width: 620px;
+  height: 1350px;
+}
+.mobileScene .sceneHeader {
+  height: 160px;
+  padding: 0 10px;
+  gap: 15px;
+}
+.mobileScene .sceneHeader h2 {
+  font-size: 34px;
+  letter-spacing: -0.8px;
+  max-width: 590px;
+}
+.mobileScene .sceneHeader p {
+  font-size: 17px;
+  line-height: 1.6;
+  max-width: 580px;
+}
+.mobileScene .sceneNumber {
+  font-size: 13px;
+}
+.mobileScene .openButton {
+  position: absolute;
+  right: 10px;
+  top: -55px;
+  font-size: 18px;
+  padding: 13px 18px;
+}
+.mobileScene .experimentControls {
+  left: 10px;
+  top: 10px;
+  gap: 14px;
+  flex-wrap: wrap;
+  width: 600px;
+}
+.mobileScene .experimentControls label {
+  font-size: 12px;
+  gap: 7px;
+}
+.mobileScene .experimentControls select {
+  font-size: 16px;
+  padding: 12px 8px;
+  max-width: 210px;
+}
+.mobileScene .mapArea,
+.mobileScene.queueScene .mapArea {
+  top: 90px;
+  left: 0;
+  width: 620px;
+  height: 350px;
+}
+.mobileScene .destinationLabel {
+  font-size: 32px;
+}
+.mobileScene .destinationState {
+  font-size: 20px;
+}
+.mobileScene .mapNote {
+  font-size: 15px;
+}
+.mobileScene .islandLabel,
+.mobileScene .layerLabel {
+  font-size: 15px;
+}
+.mobileScene .marginNotes {
+  display: none;
+}
+.mobileScene .beltArea,
+.mobileScene.queueScene .beltArea {
+  top: 440px;
+  left: 10px;
+  width: 600px;
+}
+.mobileScene .conveyorHeading {
+  font-size: 13px;
+}
+.mobileScene .parcelStop svg,
+.mobileScene.queueScene .parcelStop svg {
+  width: 70px;
+  height: 70px;
+}
+.mobileScene .parcelStop strong,
+.mobileScene.queueScene .parcelStop strong {
+  font-size: 22px;
+}
+.mobileScene .parcelStop > span,
+.mobileScene.queueScene .parcelStop > span {
+  font-size: 13px;
+}
+.mobileScene .conveyorItems,
+.mobileScene.queueScene .conveyorItems {
+  min-height: 100px;
+  padding-left: 20px;
+}
+.mobileScene .conveyor > p {
+  font-size: 14px;
+}
+.mobileScene .playback {
+  display: none;
+}
+.mobileScene .predictionNote {
+  top: 710px;
+  left: 20px;
+  right: auto;
+  width: 580px;
+}
+.mobileScene .predictionNote legend {
+  font-size: 25px;
+}
+.mobileScene .predictionNote p {
+  font-size: 20px;
+}
+.mobileScene .predictionNote button {
+  font-size: 23px;
+  min-width: 70px;
+  min-height: 70px;
+}
+.mobileScene .predictionNote .checkPrediction {
+  font-size: 20px;
+}
+.mobileScene .sceneFootnote {
+  left: 20px;
+  top: 1050px;
+  width: 560px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.mobileScene .conceptOrbit {
+  left: 0;
+  top: 30px;
+  width: 620px;
+  height: 350px;
+}
+.mobileScene .conceptSteps {
+  left: 20px;
+  right: auto;
+  top: 390px;
+  width: 580px;
+  gap: 7px;
+}
+.mobileScene .conceptSteps button {
+  font-size: 22px;
+  gap: 20px;
+  padding: 15px 0;
+}
+.mobileScene .conceptAnnotation {
+  left: 20px;
+  top: 730px;
+  width: 580px;
+  padding: 0 20px;
+}
+.mobileScene .conceptAnnotation h3 {
+  font-size: 28px;
+}
+.mobileScene .conceptAnnotation p {
+  font-size: 22px;
+}
+.mobileScene .generatedExample {
+  left: 20px;
+  top: 1050px;
+  width: 580px;
+}
+.mobileScene .generatedExample p {
+  font-size: 21px;
+}
+.mobileScene .genericNotice {
+  display: none;
+}
+.mobilePlayback {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 112px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e1e7f1;
+  border-radius: 12px;
+  padding: 9px;
+  background: #ffffffed;
+  box-shadow: 0 5px 30px #2035560a;
+}
+.mobilePlayback button {
+  height: 44px;
+  min-width: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: #edf2fc;
+  font: inherit;
+  font-size: 20px;
+  color: #3865df;
+}
+.mobilePlayback button:last-child {
+  background: #3865df;
+  color: #fff;
+  font-size: 12px;
+  padding: 0 15px;
+}
+.mobilePlayback button:disabled {
+  opacity: 0.4;
+}
+.mobilePlayback > div {
+  flex: 1;
+  min-width: 0;
+}
+.mobilePlayback span {
+  display: block;
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #8a9ab4;
+}
+.mobilePlayback strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #506689;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canvasHint {
+  bottom: 85px;
+}

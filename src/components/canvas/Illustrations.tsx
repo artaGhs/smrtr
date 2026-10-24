@@ -1,6 +1,6 @@
 import { useId } from "react";
 import type { BfsFrame, BfsTrace } from "../../lib/simulation/bfs";
-import { deliveryLayout } from "./scene-model";
+import { deliveryLayout, knownDistance } from "./scene-model";
 import styles from "./canvas.module.css";
 
 export function Parcel({
@@ -146,12 +146,12 @@ export function DeliveryMap({
   onInspect: (node: string) => void;
   target: string;
 }) {
-  const { positions, layers, depth } = deliveryLayout(trace);
+  const { positions, layers, depth, height } = deliveryLayout(trace);
   const marker = useId().replace(/:/g, "");
   return (
     <svg
       className={styles.deliveryMap}
-      viewBox="0 0 1000 565"
+      viewBox={`0 0 1000 ${height}`}
       role="group"
       aria-label="Delivery network. Buildings are graph nodes; every road is one unweighted edge. Select a destination to inspect its route."
     >
@@ -175,7 +175,7 @@ export function DeliveryMap({
               x={55 + layer * (depth ? 550 / depth : 0) - 55}
               y="100"
               width={depth ? 550 / depth : 160}
-              height="370"
+              height={height - 195}
               rx="65"
               fill={layer % 2 ? "#e6edff" : "#f0f3fa"}
               opacity=".65"
@@ -202,23 +202,28 @@ export function DeliveryMap({
       {trace.unreachable.length > 0 && (
         <g>
           <path
-            d="M765 155c35-40 119-32 169 11s64 168 11 228-135 44-177-15-30-183-3-224Z"
+            d={`M765 140 Q850 90 955 155 L965 ${height - 155} Q855 ${height - 60} 765 ${height - 150} Q735 ${height / 2} 765 140Z`}
             fill="#e8f1fc"
           />
           <path
-            d="M787 201c30-21 91-17 125 14s29 111-2 134-100 24-126-11-27-98 3-137Z"
+            d={`M785 170 Q855 135 935 180 L940 ${height - 180} Q855 ${height - 105} 785 ${height - 175} Q755 ${height / 2} 785 170Z`}
             fill="#f8f4e9"
             stroke="#d5dfe9"
           />
           <text
             x="853"
-            y="433"
+            y={height - 35}
             textAnchor="middle"
             className={styles.islandLabel}
           >
             UNREACHABLE ISLAND
           </text>
-          <text x="853" y="455" textAnchor="middle" className={styles.mapNote}>
+          <text
+            x="853"
+            y={height - 15}
+            textAnchor="middle"
+            className={styles.mapNote}
+          >
             No road from {trace.graph.start}
           </text>
         </g>
@@ -277,7 +282,7 @@ export function DeliveryMap({
             transform={`translate(${p.x},${p.y})`}
             role="button"
             tabIndex={0}
-            aria-label={`Destination ${node}, ${expanded ? "expanded" : discovered ? "queued" : "unseen"}${frame.distances[node] !== undefined ? `, ${frame.distances[node]} edges from start` : ""}. Inspect route.`}
+            aria-label={`Destination ${node}, ${expanded ? "expanded" : discovered ? "queued" : "unseen"}${knownDistance(frame, node) !== undefined ? `, ${knownDistance(frame, node)} edges from start` : ""}. Inspect route.`}
             aria-pressed={target === node}
             className={styles.destination}
             onClick={() => onInspect(node)}
