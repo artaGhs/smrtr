@@ -1,17 +1,259 @@
 "use client";
 import { useMemo } from "react";
-import { ReactFlow, Background, Controls, MarkerType, type Node, type Edge } from "@xyflow/react";
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  MarkerType,
+  type Node,
+  type Edge,
+} from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowUpRight, ArrowRight, BookOpen, Compass, Layers, Sparkles, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  ArrowRight,
+  BookOpen,
+  Compass,
+  Layers,
+  Sparkles,
+  X,
+} from "lucide-react";
 import type { StudyWorkspaceProps } from "@/lib/contracts";
 import { ActivityView } from "../activities/ActivityView";
 import { QuestionView } from "../activities/QuestionView";
-export function StudyWorkspace(props:StudyWorkspaceProps){
- const {lesson,selectedConceptId,onSelectConcept}=props;
- const concept=lesson.concepts.find(c=>c.id===selectedConceptId)??lesson.concepts[0];
- const module=lesson.modules.find(m=>m.conceptId===concept.id);
- const selectedIndex=lesson.path.indexOf(concept.id);
- const nodes:Node[]=useMemo(()=>lesson.concepts.map((c,i)=>({id:c.id,position:{x:(i%3)*230+45,y:Math.floor(i/3)*180+70+(i%2)*50},data:{label:<div><span className="node-index">{String(i+1).padStart(2,"0")} / CONCEPT</span><strong>{c.title}</strong><span>{c.summary}</span></div>},className:c.id===selectedConceptId?"concept-node selected":"concept-node",style:{width:205}})),[lesson,selectedConceptId]);
- const edges:Edge[]=lesson.relations.map(r=>({id:r.id,source:r.source,target:r.target,label:r.type,animated:r.target===selectedConceptId,style:{stroke:r.type==="prerequisite"?"#7d976e":"#c8c7bd",strokeWidth:1.5},markerEnd:{type:MarkerType.ArrowClosed,color:"#7d976e"}}));
- return <main className="app-shell"><aside className="rail"><a className="brand" href="/">s<span>↗</span></a><Compass size={21}/><BookOpen size={20}/><Layers size={20}/><div className="rail-bottom">a.</div></aside><div className="workspace"><header className="topbar"><a href="/" className="wordmark">SMRTR<span>STUDY, CONNECTED.</span></a><div className="top-status"><span className="status-dot"/> Your curiosity, mapped <span className="avatar">A</span></div></header><div className="heading"><div><div className="eyebrow">YOUR LEARNING ATLAS <span>/</span> 001</div><h1>A little more <em>connected.</em></h1><p>Turn what you’re learning into something you can see.</p></div><span className="prototype">HACKATHON PREVIEW <ArrowUpRight size={14}/></span></div><section className="study-grid"><div className="map-column"><section className="input-card"><div className="section-label"><span><Sparkles size={15}/> Start with a spark</span><span>01</span></div><label htmlFor="study-input">A topic, your notes, that tricky lecture.</label><textarea id="study-input" value={props.input} onChange={e=>props.onInputChange(e.target.value)} placeholder="What would you like to understand?"/><div className="input-footer"><span>{props.input.length.toLocaleString()} characters · Make it yours</span>{props.status==="generating"?<button onClick={props.onCancel}><X size={15}/> Cancel</button>:<button disabled={props.input.trim().length<10} onClick={props.onGenerate}>Build my map <ArrowRight size={16}/></button>}</div>{props.status==="generating"&&<p role="status">Connecting the ideas in your notes…</p>}{props.error&&<p className="error" role="alert">{props.error}</p>}</section><section className="map-card"><div className="map-heading"><div><span className="eyebrow">THE BIG PICTURE</span><h2>{lesson.title}</h2></div><span className="sample-badge">{lesson.mode==="sample"?"SAMPLE LESSON":"FROM YOUR NOTES"}</span></div><div className="flow-map"><ReactFlow nodes={nodes} edges={edges} onNodeClick={(_,node)=>onSelectConcept(node.id)} fitView minZoom={0.4} maxZoom={1.5} nodesDraggable={false} proOptions={{hideAttribution:true}}><Background gap={22} size={1} color="#d5d7cc"/><Controls showInteractive={false}/></ReactFlow></div><div className="map-footer"><span><i/> Prerequisite</span><span><i/> Related idea</span><span>{lesson.concepts.length} connected concepts</span></div></section><div className="path-bar"><Compass size={18}/><span>YOUR GUIDED PATH</span>{lesson.path.map((id,i)=><button key={id} className={id===concept.id?"active":""} onClick={()=>onSelectConcept(id)} aria-label={`Go to ${lesson.concepts.find(c=>c.id===id)?.title}`}>{String(i+1).padStart(2,"0")}</button>)}</div></div><aside className="lesson-card"><div className="lesson-topline"><span className="eyebrow">A CLOSER LOOK</span><span>{String(selectedIndex+1).padStart(2,"0")} / {String(lesson.concepts.length).padStart(2,"0")}</span></div><div className="lesson-content"><div className="concept-icon">↗</div><h2>{concept.title}</h2><p className="concept-summary">{concept.summary}</p><div className="lesson-divider"/><span className="eyebrow">THE IDEA</span><p>{module?.explanation??"This concept is being prepared."}</p>{module&&<><div className="example"><span className="eyebrow">MAKE IT CONCRETE</span><p>{module.example}</p></div><ActivityView key={`${lesson.revision}-${module.id}`} activity={module.activity} conceptId={concept.id}/>{module.questions.map(q=><QuestionView key={`${lesson.revision}-${q.id}`} question={q} onAnswer={(answer,evaluation)=>props.onAnswer(q,answer,evaluation)}/>)}</div><footer className="lesson-footer"><span>Small steps. Deeper understanding.</span><button onClick={()=>onSelectConcept(lesson.path[(selectedIndex+1)%lesson.path.length])}>Next concept <ArrowRight size={15}/></button></footer></aside></section><footer className="page-footer"><span>Follow the connections. Find your understanding.</span><button onClick={props.onLoadSample}>Explore sample lesson ↗</button><span>BUILT FOR YOUR NEXT AHA.</span></footer></div></main>
+export function StudyWorkspace(props: StudyWorkspaceProps) {
+  const { lesson, selectedConceptId, onSelectConcept } = props;
+  const concept =
+    lesson.concepts.find((c) => c.id === selectedConceptId) ??
+    lesson.concepts[0];
+  const module = lesson.modules.find((m) => m.conceptId === concept.id);
+  const selectedIndex = lesson.path.indexOf(concept.id);
+  const nodes: Node[] = useMemo(
+    () =>
+      lesson.concepts.map((c, i) => ({
+        id: c.id,
+        position: {
+          x: (i % 3) * 230 + 45,
+          y: Math.floor(i / 3) * 180 + 70 + (i % 2) * 50,
+        },
+        data: {
+          label: (
+            <div>
+              <span className="node-index">
+                {String(i + 1).padStart(2, "0")} / CONCEPT
+              </span>
+              <strong>{c.title}</strong>
+              <span>{c.summary}</span>
+            </div>
+          ),
+        },
+        className:
+          c.id === selectedConceptId ? "concept-node selected" : "concept-node",
+        style: { width: 205 },
+      })),
+    [lesson, selectedConceptId],
+  );
+  const edges: Edge[] = lesson.relations.map((r) => ({
+    id: r.id,
+    source: r.source,
+    target: r.target,
+    label: r.type,
+    animated: r.target === selectedConceptId,
+    style: {
+      stroke: r.type === "prerequisite" ? "#7d976e" : "#c8c7bd",
+      strokeWidth: 1.5,
+    },
+    markerEnd: { type: MarkerType.ArrowClosed, color: "#7d976e" },
+  }));
+  return (
+    <main className="app-shell">
+      <aside className="rail">
+        <a className="brand" href="/">
+          s<span>↗</span>
+        </a>
+        <Compass size={21} />
+        <BookOpen size={20} />
+        <Layers size={20} />
+        <div className="rail-bottom">a.</div>
+      </aside>
+      <div className="workspace">
+        <header className="topbar">
+          <a href="/" className="wordmark">
+            SMRTR<span>STUDY, CONNECTED.</span>
+          </a>
+          <div className="top-status">
+            <span className="status-dot" /> Your curiosity, mapped{" "}
+            <span className="avatar">A</span>
+          </div>
+        </header>
+        <div className="heading">
+          <div>
+            <div className="eyebrow">
+              YOUR LEARNING ATLAS <span>/</span> 001
+            </div>
+            <h1>
+              A little more <em>connected.</em>
+            </h1>
+            <p>Turn what you’re learning into something you can see.</p>
+          </div>
+          <span className="prototype">
+            HACKATHON PREVIEW <ArrowUpRight size={14} />
+          </span>
+        </div>
+        <section className="study-grid">
+          <div className="map-column">
+            <section className="input-card">
+              <div className="section-label">
+                <span>
+                  <Sparkles size={15} /> Start with a spark
+                </span>
+                <span>01</span>
+              </div>
+              <label htmlFor="study-input">
+                A topic, your notes, that tricky lecture.
+              </label>
+              <textarea
+                id="study-input"
+                value={props.input}
+                onChange={(e) => props.onInputChange(e.target.value)}
+                placeholder="What would you like to understand?"
+              />
+              <div className="input-footer">
+                <span>
+                  {props.input.length.toLocaleString()} characters · Make it
+                  yours
+                </span>
+                {props.status === "generating" ? (
+                  <button onClick={props.onCancel}>
+                    <X size={15} /> Cancel
+                  </button>
+                ) : (
+                  <button
+                    disabled={props.input.trim().length < 10}
+                    onClick={props.onGenerate}
+                  >
+                    Build my map <ArrowRight size={16} />
+                  </button>
+                )}
+              </div>
+              {props.status === "generating" && (
+                <p role="status">Connecting the ideas in your notes…</p>
+              )}
+              {props.error && (
+                <p className="error" role="alert">
+                  {props.error}
+                </p>
+              )}
+            </section>
+            <section className="map-card">
+              <div className="map-heading">
+                <div>
+                  <span className="eyebrow">THE BIG PICTURE</span>
+                  <h2>{lesson.title}</h2>
+                </div>
+                <span className="sample-badge">
+                  {lesson.mode === "sample"
+                    ? "SAMPLE LESSON"
+                    : "FROM YOUR NOTES"}
+                </span>
+              </div>
+              <div className="flow-map">
+                <ReactFlow
+                  nodes={nodes}
+                  edges={edges}
+                  onNodeClick={(_, node) => onSelectConcept(node.id)}
+                  fitView
+                  minZoom={0.4}
+                  maxZoom={1.5}
+                  nodesDraggable={false}
+                >
+                  <Background gap={22} size={1} color="#d5d7cc" />
+                  <Controls showInteractive={false} />
+                </ReactFlow>
+              </div>
+              <div className="map-footer">
+                <span>
+                  <i /> Prerequisite
+                </span>
+                <span>
+                  <i /> Related idea
+                </span>
+                <span>{lesson.concepts.length} connected concepts</span>
+              </div>
+            </section>
+            <div className="path-bar">
+              <Compass size={18} />
+              <span>YOUR GUIDED PATH</span>
+              {lesson.path.map((id, i) => (
+                <button
+                  key={id}
+                  className={id === concept.id ? "active" : ""}
+                  onClick={() => onSelectConcept(id)}
+                  aria-label={`Go to ${lesson.concepts.find((c) => c.id === id)?.title}`}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </button>
+              ))}
+            </div>
+          </div>
+          <aside className="lesson-card">
+            <div className="lesson-topline">
+              <span className="eyebrow">A CLOSER LOOK</span>
+              <span>
+                {String(selectedIndex + 1).padStart(2, "0")} /{" "}
+                {String(lesson.concepts.length).padStart(2, "0")}
+              </span>
+            </div>
+            <div className="lesson-content">
+              <div className="concept-icon">↗</div>
+              <h2>{concept.title}</h2>
+              <p className="concept-summary">{concept.summary}</p>
+              <div className="lesson-divider" />
+              <span className="eyebrow">THE IDEA</span>
+              <p>{module?.explanation ?? "This concept is being prepared."}</p>
+              {module && (
+                <>
+                  <div className="example">
+                    <span className="eyebrow">MAKE IT CONCRETE</span>
+                    <p>{module.example}</p>
+                  </div>
+                  <ActivityView
+                    key={`${lesson.revision}-${module.id}`}
+                    activity={module.activity}
+                    conceptId={concept.id}
+                  />
+                  {module.questions.map((q) => (
+                    <QuestionView
+                      key={`${lesson.revision}-${q.id}`}
+                      question={q}
+                      onAnswer={(answer, evaluation) =>
+                        props.onAnswer(q, answer, evaluation)
+                      }
+                    />
+                  ))}
+                </>
+              )}
+            </div>
+            <footer className="lesson-footer">
+              <span>Small steps. Deeper understanding.</span>
+              <button
+                onClick={() =>
+                  onSelectConcept(
+                    lesson.path[(selectedIndex + 1) % lesson.path.length],
+                  )
+                }
+              >
+                Next concept <ArrowRight size={15} />
+              </button>
+            </footer>
+          </aside>
+        </section>
+        <footer className="page-footer">
+          <span>Follow the connections. Find your understanding.</span>
+          <button onClick={props.onLoadSample}>Explore sample lesson ↗</button>
+          <span>BUILT FOR YOUR NEXT AHA.</span>
+        </footer>
+      </div>
+    </main>
+  );
 }
