@@ -1,0 +1,4 @@
+"use client";
+import { useState } from "react";
+import type { QuestionViewProps } from "@/lib/contracts";
+export function QuestionView({question,onAnswer}:QuestionViewProps){const [answer,setAnswer]=useState<string|null>(null);return <section className="question"><span className="eyebrow">CHECK YOUR UNDERSTANDING</span><h3>{question.prompt}</h3><div className="answers">{question.options.map(option=><button key={option.id} disabled={answer!==null} className={answer===option.id?"chosen":""} onClick={()=>{setAnswer(option.id);const correct=question.correctOptionIds.includes(option.id);onAnswer([option.id],{correct,feedback:question.explanation,reviewConceptIds:correct?[]:question.conceptIds})}}>{option.text}</button>)}</div>{answer&&<p className="feedback">{question.correctOptionIds.includes(answer)?"That's it. ":"Let's revisit this. "}{question.explanation}</p>}</section>}
