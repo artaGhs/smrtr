@@ -53,6 +53,18 @@ export const LessonModuleSchema = z.object({
   activity: ActivitySpecSchema,
   questions: z.array(QuestionSchema),
 });
+export const TeachingStepSchema = z.object({
+  conceptId: z.string(),
+  approach: z.enum(["example", "visual", "explanation", "practice"]),
+  purpose: z.string(),
+});
+export const TeachingPlanSchema = z.object({
+  openingQuestion: z.string(),
+  bigPicture: z.string(),
+  sequence: z.array(TeachingStepSchema).min(1),
+});
+export type TeachingStep = z.infer<typeof TeachingStepSchema>;
+export type TeachingPlan = z.infer<typeof TeachingPlanSchema>;
 export const LessonSchema = z.object({
   id: z.string(),
   revision: z.string(),
@@ -65,6 +77,7 @@ export const LessonSchema = z.object({
   relations: z.array(RelationSchema),
   path: z.array(z.string()),
   modules: z.array(LessonModuleSchema),
+  teachingPlan: TeachingPlanSchema.optional(),
   finalQuestions: z.array(QuestionSchema),
 });
 export const GenerationRequestSchema = z.object({
@@ -161,4 +174,13 @@ export type StudyWorkspaceProps = {
     evaluation: Evaluation,
   ) => void;
   onLoadSample: () => void;
+};
+
+export type LearningCanvasProps = {
+  lesson: Lesson;
+  selectedConceptId: string;
+  onSelectConcept: (id: string) => void;
+  onOpenConcept: (id: string) => void;
+  activeSceneIndex: number;
+  onSceneChange: (index: number) => void;
 };
