@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { once } from "node:events";
@@ -10,7 +11,7 @@ import {
   getChatRequest,
   cancelChatRequest,
 } from "../src/lib/server/chat-store";
-import type { Lesson } from "../src/lib/contracts";
+import type { Lesson, LearnerProfile } from "../src/lib/contracts";
 
 const root = process.cwd();
 const tsx = resolve(root, "node_modules/tsx/dist/cli.mjs");
@@ -32,9 +33,14 @@ class ProtocolClient {
   >();
   failure: Error | null = null;
   constructor(directory: string) {
+    const guard = join(directory, "no-model-calls.mjs");
+    writeFileSync(
+      guard,
+      'globalThis.fetch = async () => { process.stderr.write("SMRTR_TEST_MODEL_CALL\\n"); throw new Error("MCP bridge must not invoke a model or fetch remote content"); };',
+    );
     this.child = spawn(
       process.execPath,
-      [tsx, resolve(root, "mcp/server.ts")],
+      ["--import", guard, tsx, resolve(root, "mcp/server.ts")],
       {
         cwd: directory,
         env: { ...process.env, SMRTR_BRIDGE_DIR: directory },
@@ -122,6 +128,11 @@ class ProtocolClient {
     return message.result;
   }
   async close() {
+    assert.doesNotMatch(
+      this.stderr,
+      /SMRTR_TEST_MODEL_CALL/,
+      "MCP tools must not invoke a model or fetch content",
+    );
     if (this.child.exitCode !== null) return;
     const exited = once(this.child, "exit");
     this.child.stdin.end();
@@ -189,6 +200,182 @@ function candidate(): Lesson {
       },
     ],
     finalQuestions: [{ ...question, id: "final-fifo" }],
+    teachingPlan: {
+      openingQuestion: "Who should leave the service counter first?",
+      bigPicture:
+        "Follow two arrivals through one queue, then explain why the earlier arrival leaves first.",
+      sequence: [
+        {
+          conceptId: "fifo",
+          approach: "example",
+          purpose: "Trace arrival and departure order in one coherent example.",
+        },
+      ],
+    },
+    learningDesign: {
+      centralQuestion: "Who should leave the service counter first?",
+      objective: "Predict departure order from the order people arrive.",
+      assumedKnowledge: ["People can wait in an ordered line."],
+      scenario: {
+        id: "counter-example",
+        title: "Two arrivals, one service counter",
+        description:
+          "Generated example: Ada arrives at a service counter before Ben. Both wait for one clerk.",
+        entities: [
+          { id: "ada", label: "Ada", role: "Earliest arrival" },
+          { id: "ben", label: "Ben", role: "Later arrival" },
+        ],
+        activityConceptId: null,
+        activity: null,
+      },
+      pages: [
+        {
+          id: "overview",
+          title: "A service counter",
+          question: "Who should the clerk serve first?",
+          purpose:
+            "Establish the two-arrival scenario before introducing queue rules.",
+          kind: "overview",
+          parentId: null,
+          conceptIds: ["fifo"],
+          sourceIds: ["source-input"],
+          topicIds: [],
+          blocks: [
+            {
+              id: "overview-block",
+              kind: "paragraph",
+              segments: [
+                {
+                  kind: "text",
+                  text: "Ada arrives before Ben. One clerk serves one person at a time.",
+                },
+                {
+                  kind: "page-link",
+                  text: "Follow the queue",
+                  pageId: "core-queue",
+                  reason: "Use the same arrivals to make the next prediction.",
+                },
+              ],
+            },
+          ],
+          scene: "explanation",
+          activityConceptId: null,
+          recommendedNextPageId: "core-queue",
+        },
+        {
+          id: "core-queue",
+          title: "Follow arrival order",
+          question: "Why does Ada leave before Ben?",
+          purpose: "Apply the FIFO rule to this same waiting line.",
+          kind: "core",
+          parentId: "overview",
+          conceptIds: ["fifo"],
+          sourceIds: ["source-input"],
+          topicIds: [],
+          blocks: [
+            {
+              id: "core-block",
+              kind: "paragraph",
+              segments: [
+                {
+                  kind: "text",
+                  text: "The earliest arrival still waiting is at the front.",
+                },
+                {
+                  kind: "page-link",
+                  text: "What is a queue?",
+                  pageId: "support-queue",
+                  reason:
+                    "Review the waiting-line model without changing the example.",
+                },
+              ],
+            },
+          ],
+          scene: "explanation",
+          activityConceptId: null,
+          recommendedNextPageId: null,
+        },
+        {
+          id: "support-queue",
+          title: "A queue",
+          question: "What makes this an ordered queue?",
+          purpose: "Explain how the front and back preserve arrival order.",
+          kind: "support",
+          parentId: "core-queue",
+          conceptIds: ["fifo"],
+          sourceIds: ["source-input"],
+          topicIds: [],
+          blocks: [
+            {
+              id: "queue-support-block",
+              kind: "paragraph",
+              segments: [
+                {
+                  kind: "text",
+                  text: "New people join behind those already waiting.",
+                },
+                {
+                  kind: "page-link",
+                  text: "First in, first out",
+                  pageId: "support-fifo",
+                  reason:
+                    "Unpack the phrase using Ada and Ben from the same counter.",
+                },
+              ],
+            },
+          ],
+          scene: "explanation",
+          activityConceptId: null,
+          recommendedNextPageId: null,
+        },
+        {
+          id: "support-fifo",
+          title: "First in, first out",
+          question: "What does first in, first out mean here?",
+          purpose: "Connect the FIFO phrase to Ada arriving before Ben.",
+          kind: "support",
+          parentId: "support-queue",
+          conceptIds: ["fifo"],
+          sourceIds: ["source-input"],
+          topicIds: [],
+          blocks: [
+            {
+              id: "fifo-support-block",
+              kind: "paragraph",
+              segments: [
+                {
+                  kind: "text",
+                  text: "Ada is first in the line, so Ada is the first to leave for service.",
+                },
+              ],
+            },
+          ],
+          scene: "none",
+          activityConceptId: null,
+          recommendedNextPageId: null,
+        },
+      ],
+      sequence: [
+        {
+          pageId: "overview",
+          purpose: "Ground the lesson in a concrete two-arrival scenario.",
+          whyNext:
+            "A visible waiting line makes the abstract rule easier to follow.",
+        },
+        {
+          pageId: "core-queue",
+          purpose: "Use the scenario to reason about FIFO departure order.",
+          whyNext:
+            "After predicting the next departure, check the explanation.",
+        },
+      ],
+      routes: {
+        new: ["overview", "core-queue"],
+        recognize: ["overview", "core-queue"],
+        explain: ["core-queue"],
+        apply: ["core-queue"],
+      },
+    },
   };
 }
 function data(result: any) {
@@ -462,6 +649,26 @@ test(
       ],
     };
     lesson.modules[0].questions[0].correctOptionIds = ["last"];
+    lesson.learningDesign!.scenario = {
+      id: "delivery-network",
+      title: "One parcel delivery network",
+      description:
+        "Generated example: a parcel starts at S and follows one-way unweighted roads to reach connected destinations. U is isolated.",
+      entities: lesson.modules[0].activity.nodes.map((id) => ({
+        id,
+        label: id,
+        role: id === "S" ? "Start depot" : "Destination",
+      })),
+      activityConceptId: "fifo",
+      activity: lesson.modules[0].activity,
+    };
+    lesson.learningDesign!.pages = lesson.learningDesign!.pages.map(
+      (page, index) => ({
+        ...page,
+        scene: index === 0 ? "scenario" : "queue",
+        activityConceptId: "fifo",
+      }),
+    );
     const client = new ProtocolClient(directory);
     try {
       await client.initialize();
@@ -487,6 +694,147 @@ test(
       );
       assert.equal(saved.sources[0].text, text);
       assert.equal(saved.origin, "chat");
+    } finally {
+      await client.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "MCP exports immutable confidence and hierarchy context and rejects profile replacement",
+  { timeout: 30000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "smrtr-mcp-profile-"));
+    const contexts: string[] = [];
+    try {
+      for (const overall of ["new", "apply"] as const) {
+        const profile: LearnerProfile = {
+          overall,
+          topics: [
+            { id: "queue-topic", label: "Queues", level: null },
+            { id: "fifo-topic", label: "FIFO order", level: "recognize" },
+          ],
+        };
+        const expected = structuredClone(profile);
+        const request = await createChatRequest(
+          { text: notes, learnerProfile: profile },
+          { directory },
+        );
+        profile.overall = overall === "new" ? "apply" : "new";
+        profile.topics[0].level = "apply";
+        const client = new ProtocolClient(directory);
+        try {
+          await client.initialize();
+          const exported = data(
+            await client.call("get_lesson_request", { id: request.id }),
+          );
+          assert.deepEqual(exported.learnerProfile, expected);
+          assert.deepEqual(exported.request.learnerProfile, expected);
+          assert.deepEqual(exported.requiredMetadata.learnerProfile, expected);
+          assert.equal(exported.designRequired, true);
+          assert.ok(
+            exported.lessonSchema.properties.learningDesign.properties.pages,
+          );
+          assert.ok(
+            exported.lessonSchema.properties.learnerProfile.properties.topics,
+          );
+          contexts.push(exported.confidenceGuidance);
+          const missing = candidate();
+          delete missing.learningDesign;
+          const rejected = await client.call("submit_lesson", {
+            id: request.id,
+            revision: request.revision,
+            lesson: missing,
+          });
+          assert.equal(rejected.isError, true);
+          assert.equal(data(rejected).code, "INVALID_CHAT_LESSON");
+          const lesson = candidate();
+          lesson.learnerProfile = {
+            overall: overall === "new" ? "apply" : "new",
+            topics: [],
+          };
+          const submitted = await client.call("submit_lesson", {
+            id: request.id,
+            revision: request.revision,
+            lesson,
+          });
+          assert.notEqual(submitted.isError, true, JSON.stringify(submitted));
+          const saved = await getChatRequest(request.id, { directory });
+          assert.deepEqual(saved.learnerProfile, expected);
+          assert.deepEqual(saved.lesson!.learnerProfile, expected);
+          assert.equal(
+            saved.lesson!.learningDesign!.pages.find(
+              (page) => page.id === "support-fifo",
+            )!.parentId,
+            "support-queue",
+          );
+          assert.equal(
+            saved.lesson!.learningDesign!.pages.find(
+              (page) => page.id === "support-queue",
+            )!.parentId,
+            "core-queue",
+          );
+          assert.deepEqual(saved.lesson!.learningDesign!.routes.new, [
+            "overview",
+            "core-queue",
+          ]);
+          assert.deepEqual(saved.lesson!.learningDesign!.routes.apply, [
+            "core-queue",
+          ]);
+        } finally {
+          await client.close();
+        }
+      }
+      assert.equal(contexts.length, 2);
+      assert.notEqual(
+        contexts[0],
+        contexts[1],
+        "self-reported confidence changes teaching guidance",
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "MCP still fulfills stored v1 requests without authored profile or hierarchy metadata",
+  { timeout: 30000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "smrtr-mcp-legacy-"));
+    const created = await createChatRequest({ text: notes }, { directory });
+    const legacy = {
+      ...created,
+      version: 1,
+      learnerProfile: undefined,
+      designRequired: undefined,
+    };
+    await writeFile(
+      join(directory, `${created.id}.json`),
+      JSON.stringify(legacy),
+    );
+    const client = new ProtocolClient(directory);
+    try {
+      await client.initialize();
+      const exported = data(
+        await client.call("get_lesson_request", { id: created.id }),
+      );
+      assert.equal(exported.designRequired, false);
+      assert.deepEqual(exported.learnerProfile, { overall: "new", topics: [] });
+      const lesson = candidate();
+      delete lesson.learningDesign;
+      delete lesson.teachingPlan;
+      const submitted = await client.call("submit_lesson", {
+        id: created.id,
+        revision: created.revision,
+        lesson,
+      });
+      assert.notEqual(submitted.isError, true, JSON.stringify(submitted));
+      assert.equal(
+        (await getChatRequest(created.id, { directory })).state,
+        "completed",
+      );
     } finally {
       await client.close();
       await rm(directory, { recursive: true, force: true });
