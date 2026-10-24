@@ -3,13 +3,14 @@
 import { useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, Check, Compass,
-  FileText, Focus, Layers, LoaderCircle, RotateCcw, Sparkles, X,
+  FileText, Focus, KeyRound, Layers, LoaderCircle, MessageSquare, RotateCcw, Sparkles, X,
 } from "lucide-react";
 import type { Question, StudyWorkspaceProps } from "@/lib/contracts";
 import { ActivityView } from "../activities/ActivityView";
 import { QuestionView } from "../activities/QuestionView";
 import { ConceptMap } from "./ConceptMap";
 import { SourcePassages } from "./SourcePassages";
+import { ChatHandoff } from "./ChatHandoff";
 
 type DetailView = "learn" | "sources" | "practice";
 
@@ -34,6 +35,9 @@ function WorkspaceContent(props: StudyWorkspaceProps) {
   const related = lesson.relations.filter((relation) => relation.source === concept.id || relation.target === concept.id);
   const generating = props.status === "generating";
   const inputLength = props.input.trim().length;
+  const chatMode = props.generationMode === "chat";
+  const waitingForChat = chatMode && props.chatRequest?.status === "waiting" && generating;
+  const lessonBadge = lesson.mode === "sample" ? "SAMPLE LESSON" : lesson.origin === "chat" ? "GENERATED WITH CONNECTED CHAT" : "FROM YOUR NOTES";
 
   function revealDetail() {
     requestAnimationFrame(() => {
@@ -91,20 +95,23 @@ function WorkspaceContent(props: StudyWorkspaceProps) {
 
         <section className="study-grid" aria-label="Study workspace">
           <div className="map-column">
-            <section className="input-card" aria-labelledby="input-heading" aria-busy={generating}>
+            <section className="input-card" aria-labelledby="input-heading">
               <div className="section-label"><span id="input-heading"><Sparkles size={15} />Start with a spark</span><button className="text-button" onClick={props.onLoadSample}>Explore sample <ArrowUpRight size={12} /></button></div>
               <label htmlFor="study-input">A topic, your notes, that tricky lecture.</label>
+              <div className="generation-modes" role="group" aria-label="How to create your lesson"><button className={chatMode ? "active" : ""} aria-pressed={chatMode} onClick={() => props.onGenerationModeChange("chat")}><MessageSquare size={13} />Use my chat<span>No API key</span></button><button className={!chatMode ? "active" : ""} aria-pressed={!chatMode} onClick={() => props.onGenerationModeChange("provider")}><KeyRound size={13} />Provider API</button></div>
+              <p className="mode-explanation">{chatMode ? "Prepare a request for your own LLM chat, then bring the lesson back." : "Generate directly with the provider configured on this app’s server."}</p>
               <textarea id="study-input" value={props.input} maxLength={40000} onChange={(event) => props.onInputChange(event.target.value)} placeholder="Paste your notes or tell us what you want to understand…" aria-describedby="input-help" />
               <div className="input-footer">
                 <span id="input-help">{props.input.length.toLocaleString()} / 40,000 characters{inputLength < 10 ? " · Add at least 10 characters" : " · Ready to connect"}</span>
-                {generating ? <button className="primary-button" onClick={props.onCancel}><X size={15} />Cancel generation</button> : <button className="primary-button" disabled={inputLength < 10 || inputLength > 40000} onClick={props.onGenerate}>Build my map <ArrowRight size={16} /></button>}
+                {generating ? <button className="primary-button" onClick={props.onCancel}><X size={15} />{waitingForChat ? "Stop waiting" : "Cancel"}</button> : <button className="primary-button" disabled={inputLength < 10 || inputLength > 40000} onClick={props.onGenerate}>{chatMode ? "Prepare chat request" : "Build my map"}<ArrowRight size={16} /></button>}
               </div>
-              {generating && <div className="generation-progress" role="status"><LoaderCircle className="spin" size={17} /><div><strong>Building a map from your notes…</strong><span>Connecting concepts, explanations, and practice. You can keep exploring below.</span></div><div className="indeterminate-track" /></div>}
+              {generating && !waitingForChat && <div className="generation-progress" role="status"><LoaderCircle className="spin" size={17} /><div><strong>{chatMode ? "Preparing your chat request…" : "Building a map from your notes…"}</strong><span>{chatMode ? "Your notes will be packaged with the lesson format and instructions." : "Connecting concepts, explanations, and practice. You can keep exploring below."}</span></div><div className="indeterminate-track" /></div>}
+              {chatMode && props.chatRequest && <ChatHandoff key={props.chatRequest.id} chatRequest={props.chatRequest} status={props.status} onCopyChatRequest={props.onCopyChatRequest} onImportChatLesson={props.onImportChatLesson} />}
               {props.error && <div className="error" role="alert"><strong>Your new map couldn’t be created.</strong><p>{props.error}</p><span>{lesson.mode === "sample" ? "The labeled sample is still available below." : "Your previous lesson is still available below."} Your notes are saved in the box above.</span></div>}
             </section>
 
             <section className="map-card" ref={mapRef} tabIndex={-1} aria-labelledby="map-heading">
-              <div className="map-heading"><div><span className="eyebrow">THE BIG PICTURE</span><h2 id="map-heading">{lesson.title}</h2></div><span className={`sample-badge ${lesson.mode === "generated" ? "generated-badge" : ""}`}>{lesson.mode === "sample" ? "SAMPLE LESSON" : "FROM YOUR NOTES"}</span></div>
+              <div className="map-heading"><div><span className="eyebrow">THE BIG PICTURE</span><h2 id="map-heading">{lesson.title}</h2></div><span className={`sample-badge ${lesson.mode === "generated" ? "generated-badge" : ""}`}>{lessonBadge}</span></div>
               <p className="map-summary">{lesson.summary}</p>
               {lesson.mode === "sample" && <p className="sample-note">A prepared example to explore. Build a new map above to use your own notes.</p>}
               <ConceptMap lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id)} practiced={practiced} needsReview={needsReview} overviewVersion={overviewVersion} />
