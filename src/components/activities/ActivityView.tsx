@@ -5,6 +5,7 @@ import type {
   ActivitySpec,
   ActivityViewProps,
   BfsActivity,
+  SimulationState,
 } from "@/lib/contracts";
 import {
   compareNodeIds,
@@ -13,13 +14,26 @@ import {
   pathTo,
   type BfsTrace,
 } from "@/lib/simulation/bfs";
+import {
+  changeSimulationState,
+  defaultSimulationState,
+  normalizeSimulationState,
+} from "../canvas/simulation-state";
+import { experimentGraph } from "../canvas/scene-model";
 import styles from "./activities.module.css";
 
-export function ActivityView({ activity, conceptId }: ActivityViewProps) {
+export function ActivityView({
+  activity,
+  conceptId,
+  simulation,
+  onSimulationChange,
+}: ActivityViewProps) {
   return activity.kind === "bfs" ? (
     <BfsActivityView
       key={`${conceptId}:${JSON.stringify(activity)}`}
       activity={activity}
+      simulation={simulation}
+      onSimulationChange={onSimulationChange}
     />
   ) : (
     <ConceptActivity
@@ -76,32 +90,26 @@ function ConceptActivity({
   );
 }
 
-function BfsActivityView({ activity }: { activity: BfsActivity }) {
-  const [start, setStart] = useState(activity.start);
-  const [directed, setDirected] = useState(activity.directed);
-  const [variant, setVariant] = useState("original");
-  const lastNode = activity.nodes.at(-1)!;
+function BfsActivityView({
+  activity,
+  simulation,
+  onSimulationChange,
+}: {
+  activity: BfsActivity;
+  simulation?: SimulationState;
+  onSimulationChange?: (state: SimulationState) => void;
+}) {
+  const [local, setLocal] = useState(() => defaultSimulationState(activity));
+  const state = normalizeSimulationState(activity, simulation ?? local);
+  const change = (patch: Partial<SimulationState>) => {
+    if (simulation !== undefined || onSimulationChange)
+      onSimulationChange?.(changeSimulationState(activity, simulation, patch));
+    else
+      setLocal((previous) => changeSimulationState(activity, previous, patch));
+  };
   const graph = useMemo(
-    () => ({
-      ...activity,
-      start,
-      directed,
-      edges:
-        variant === "isolated"
-          ? activity.edges.filter(
-              (e) => e.source !== lastNode && e.target !== lastNode,
-            )
-          : variant === "cycles"
-            ? [
-                ...activity.edges,
-                ...activity.edges.map((e) => ({
-                  source: e.target,
-                  target: e.source,
-                })),
-              ]
-            : activity.edges,
-    }),
-    [activity, start, directed, variant, lastNode],
+    () => experimentGraph(activity, state.start, state.directed, state.variant),
+    [activity, state.start, state.directed, state.variant],
   );
   const result = useMemo(() => {
     try {
@@ -128,7 +136,10 @@ function BfsActivityView({ activity }: { activity: BfsActivity }) {
       <div className={styles.settings}>
         <label>
           Start node
-          <select value={start} onChange={(e) => setStart(e.target.value)}>
+          <select
+            value={state.start}
+            onChange={(e) => change({ start: e.target.value })}
+          >
             {activity.nodes.map((n) => (
               <option key={n} value={n}>
                 {n}
@@ -139,8 +150,10 @@ function BfsActivityView({ activity }: { activity: BfsActivity }) {
         <label>
           Connections
           <select
-            value={directed ? "directed" : "undirected"}
-            onChange={(e) => setDirected(e.target.value === "directed")}
+            value={state.directed ? "directed" : "undirected"}
+            onChange={(e) =>
+              change({ directed: e.target.value === "directed" })
+            }
           >
             <option value="directed">Directed →</option>
             <option value="undirected">Undirected ↔</option>
@@ -148,15 +161,25 @@ function BfsActivityView({ activity }: { activity: BfsActivity }) {
         </label>
         <label className={styles.wideSetting}>
           Experiment
-          <select value={variant} onChange={(e) => setVariant(e.target.value)}>
+          <select
+            value={state.variant}
+            onChange={(e) => change({ variant: e.target.value })}
+          >
             <option value="original">Lesson graph</option>
-            <option value="cycles">Add return edges</option>
-            <option value="isolated">Isolate {lastNode}</option>
+            <option value="return">Add return edges</option>
+            <option value="island">Disconnect a reachable stop</option>
           </select>
         </label>
       </div>
       {result.trace ? (
-        <BfsPlayback key={JSON.stringify(graph)} trace={result.trace} />
+        <BfsPlayback
+          key={`${JSON.stringify(graph)}:${state.step}`}
+          trace={result.trace}
+          index={state.step}
+          target={state.target}
+          onStep={(step) => change({ step })}
+          onTarget={(target) => change({ target })}
+        />
       ) : (
         <p role="alert" className={styles.feedback}>
           {result.error}
@@ -170,15 +193,25 @@ function BfsActivityView({ activity }: { activity: BfsActivity }) {
   );
 }
 
-function BfsPlayback({ trace }: { trace: BfsTrace }) {
-  const [index, setIndex] = useState(0);
-  const [target, setTarget] = useState(trace.graph.nodes.at(-1)!);
+function BfsPlayback({
+  trace,
+  index,
+  target,
+  onStep,
+  onTarget,
+}: {
+  trace: BfsTrace;
+  index: number;
+  target: string;
+  onStep: (step: number) => void;
+  onTarget: (target: string) => void;
+}) {
   const [prediction, setPrediction] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
   const frame = trace.frames[index];
   const path = pathTo(frame, target);
   const changeStep = (next: number) => {
-    setIndex(next);
+    onStep(next);
     setPrediction(null);
     setChecked(false);
   };
@@ -196,7 +229,7 @@ function BfsPlayback({ trace }: { trace: BfsTrace }) {
         trace={trace}
         index={index}
         target={target}
-        onTarget={setTarget}
+        onTarget={onTarget}
         path={path}
       />
       <div className={styles.legend}>
