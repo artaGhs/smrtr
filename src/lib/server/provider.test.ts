@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createOpenAIProvider, type ProviderRequest } from "./provider";
 import { GenerationError, publicError } from "./errors";
+import { ContentSchema, providerJsonSchema } from "./schemas";
 
 const request: ProviderRequest = { schemaName: "study_plan", jsonSchema: { type: "object" }, instructions: "Return JSON", input: "Study biology", signal: new AbortController().signal, maxOutputTokens: 1000 };
 
@@ -34,6 +35,9 @@ test("provider failures are actionable and never reveal upstream response text",
 
 test("refusal, incomplete and malformed provider output are rejected", async () => {
   const cases = [
+    [null, "PROVIDER_INVALID_OUTPUT"],
+    [{ output: "invalid" }, "PROVIDER_INVALID_OUTPUT"],
+    [{ output: [{ type: "message", content: null }] }, "PROVIDER_INVALID_OUTPUT"],
     [{ status: "incomplete" }, "PROVIDER_INCOMPLETE"],
     [{ output: [{ type: "message", content: [{ type: "refusal" }] }] }, "PROVIDER_REFUSED"],
     [{ output: [{ type: "message", content: [{ type: "output_text", text: "not JSON" }] }] }, "PROVIDER_INVALID_OUTPUT"],
@@ -42,4 +46,25 @@ test("refusal, incomplete and malformed provider output are rejected", async () 
     const provider = createOpenAIProvider({ apiKey: "test", fetch: (async () => Response.json(payload)) as typeof fetch });
     await assert.rejects(provider.generate(request), (error: unknown) => error instanceof GenerationError && error.code === code);
   }
+});
+
+test("provider schema uses supported nested anyOf and enum for activity variants", () => {
+  const schema = providerJsonSchema(ContentSchema);
+  const serialized = JSON.stringify(schema);
+  assert.equal(schema.type, "object");
+  assert.ok(serialized.includes('"anyOf"'));
+  assert.ok(serialized.includes('"enum":["bfs"]'));
+  assert.equal(serialized.includes('"oneOf"'), false);
+  assert.equal(serialized.includes('"const"'), false);
+  const checkObjects = (value: unknown) => {
+    if (Array.isArray(value)) return value.forEach(checkObjects);
+    if (!value || typeof value !== "object") return;
+    const object = value as Record<string, unknown>;
+    if (object.type === "object") {
+      assert.equal(object.additionalProperties, false);
+      assert.deepEqual(object.required, Object.keys(object.properties as object));
+    }
+    Object.values(object).forEach(checkObjects);
+  };
+  checkObjects(schema);
 });

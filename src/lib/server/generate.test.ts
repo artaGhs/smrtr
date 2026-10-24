@@ -22,7 +22,7 @@ function lessonParts(topic: string) {
 
 function providerFor(topic: string, requests: ProviderRequest[] = []): LessonProvider {
   const parts = lessonParts(topic);
-  return { async generate(request) { requests.push(request); return request.schemaName === "study_plan" ? { status: "ready", reason: "", plan: parts.plan } : parts.content; } };
+  return { async generate(request) { requests.push(request); return request.schemaName === "study_plan" ? { status: "ready", reason: "", plan: parts.plan } : { module: parts.content.modules.find((module) => module.conceptId === JSON.parse(request.input).targetConceptId) }; } };
 }
 
 test("fresh topics produce distinct generated lessons, exact sources, and validated progressive events", async () => {
@@ -41,7 +41,7 @@ test("fresh topics produce distinct generated lessons, exact sources, and valida
   assert.deepEqual(events.map((event) => event.type), ["plan", "module", "module", "complete"]);
   assert.ok(events.every((event) => GenerationEventSchema.safeParse(event).success));
   assert.equal(events[0].type === "plan" && events[0].lesson.modules.length, 0);
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 3);
 });
 
 test("invalid references get one bounded repair before any complete event", async () => {
@@ -52,21 +52,73 @@ test("invalid references get one bounded repair before any complete event", asyn
     requests.push(request); calls++;
     if (calls === 1) return { status: "ready", reason: "", plan: { ...parts.plan, path: ["ghost"] } };
     if (calls === 2) return { status: "ready", reason: "", plan: parts.plan };
-    return parts.content;
+    return { module: parts.content.modules.find((module) => module.conceptId === JSON.parse(request.input).targetConceptId) };
   } };
   const result = await generateLesson({ requestId: "repair", text: "Biology investigates living organisms." }, { provider });
   assert.equal(result.lesson.path[0], "foundation");
   assert.ok(JSON.parse(requests[1].input).correction.length);
-  assert.equal(calls, 3);
+  assert.equal(calls, 4);
+});
+
+test("modules publish independently as they finish and final lesson retains planned order", async () => {
+  const parts = lessonParts("Biology");
+  const arrivals: string[] = [];
+  let active = 0;
+  let activeWhenFirstModule = 0;
+  const provider: LessonProvider = { async generate(request) {
+    if (request.schemaName === "study_plan") return { status: "ready", reason: "", plan: parts.plan };
+    const id = JSON.parse(request.input).targetConceptId;
+    active++;
+    await new Promise((resolve) => setTimeout(resolve, id === "foundation" ? 15 : 1));
+    active--;
+    return { module: parts.content.modules.find((module) => module.conceptId === id) };
+  } };
+  const result = await generateLesson({ requestId: "parallel", text: "Biology investigates living organisms." }, { provider, onEvent: (event) => {
+    if (event.type === "module") { if (!arrivals.length) activeWhenFirstModule = active; arrivals.push(event.module.conceptId); }
+  } });
+  assert.deepEqual(arrivals, ["application", "foundation"]);
+  assert.equal(activeWhenFirstModule, 1);
+  assert.deepEqual(result.lesson.modules.map((module) => module.conceptId), ["foundation", "application"]);
+});
+
+test("module generation has at most three provider calls in flight", async () => {
+  const parts = lessonParts("Biology");
+  const concepts = Array.from({ length: 5 }, (_, index) => ({ ...parts.plan.concepts[0], id: `concept-${index}` }));
+  const plan = { ...parts.plan, concepts, path: concepts.map((concept) => concept.id), relations: concepts.slice(1).map((concept, index) => ({ id: `relation-${index}`, source: concepts[index].id, target: concept.id, type: "prerequisite" })) };
+  let active = 0;
+  let peak = 0;
+  const provider: LessonProvider = { async generate(request) {
+    if (request.schemaName === "study_plan") return { status: "ready", reason: "", plan };
+    const id = JSON.parse(request.input).targetConceptId;
+    active++; peak = Math.max(peak, active);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    active--;
+    return { module: { ...parts.content.modules[0], id: `module-${id}`, conceptId: id, questions: parts.content.modules[0].questions.map((question) => ({ ...question, id: `question-${id}`, conceptIds: [id] })) } };
+  } };
+  const result = await generateLesson({ requestId: "bounded", text: "Biology investigates living organisms." }, { provider });
+  assert.equal(peak, 3);
+  assert.equal(result.lesson.modules.length, 5);
+});
+
+test("a failed module aborts pending sibling provider calls", async () => {
+  const parts = lessonParts("Biology");
+  let siblingAborted = false;
+  const provider: LessonProvider = { async generate(request) {
+    if (request.schemaName === "study_plan") return { status: "ready", reason: "", plan: parts.plan };
+    if (JSON.parse(request.input).targetConceptId === "foundation") throw new GenerationError("PROVIDER_RATE_LIMITED", "Provider quota", 429);
+    return new Promise((_, reject) => request.signal.addEventListener("abort", () => { siblingAborted = true; reject(request.signal.reason); }, { once: true }));
+  } };
+  await assert.rejects(generateLesson({ requestId: "failure", text: "Biology investigates living organisms." }, { provider }), (error: unknown) => error instanceof GenerationError && error.code === "PROVIDER_RATE_LIMITED");
+  assert.equal(siblingAborted, true);
 });
 
 test("persistent invalid content fails after one repair and never emits complete", async () => {
   const parts = lessonParts("Biology");
   let calls = 0;
   const events: GenerationEvent[] = [];
-  const provider: LessonProvider = { async generate(request) { calls++; return request.schemaName === "study_plan" ? { status: "ready", reason: "", plan: parts.plan } : { ...parts.content, modules: [] }; } };
+  const provider: LessonProvider = { async generate(request) { calls++; return request.schemaName === "study_plan" ? { status: "ready", reason: "", plan: parts.plan } : { module: null }; } };
   await assert.rejects(generateLesson({ requestId: "invalid", text: "Biology investigates living organisms." }, { provider, onEvent: (event) => events.push(event) }), (error: unknown) => error instanceof GenerationError && error.code === "INVALID_GENERATED_LESSON");
-  assert.equal(calls, 3);
+  assert.ok(calls >= 3 && calls <= 5);
   assert.deepEqual(events.map((event) => event.type), ["plan"]);
 });
 
@@ -107,7 +159,8 @@ test("BFS answers use the shared simulation core, including unreachable nodes", 
 test("BFS model answer keys are replaced by computed questions", async () => {
   const parts = lessonParts("BFS");
   const provider: LessonProvider = { async generate(request) {
-    return request.schemaName === "study_plan" ? { status: "ready", reason: "", plan: parts.plan } : { ...parts.content, modules: parts.content.modules.map((module, index) => index ? module : { ...module, activity: graph, questions: [] }) };
+    const module = parts.content.modules.find((item) => item.conceptId === JSON.parse(request.input).targetConceptId);
+    return request.schemaName === "study_plan" ? { status: "ready", reason: "", plan: parts.plan } : { module: module?.conceptId === "foundation" ? { ...module, activity: graph, questions: [] } : module };
   } };
   const { lesson } = await generateLesson({ requestId: "bfs", text: "Breadth-first search (BFS) explores an unweighted graph in layers." }, { provider });
   assert.equal(lesson.modules[0].questions[0].id, "module-foundation-computed-order");
