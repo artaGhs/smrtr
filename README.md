@@ -1,6 +1,6 @@
 # SMRTR
 
-Turn study notes into a connected concept map, interactive explanations, and practice that links back to the ideas you want to review.
+Turn study notes into visual lessons, interactive explanations, and practice linked to the ideas you want to review.
 
 A hackathon prototype built with Next.js, React, TypeScript, Zod, and React Flow.
 
@@ -33,10 +33,13 @@ npm ci --cache /tmp/smrtr-npm-cache
 
 ## Learning flow
 
-- Pan and zoom through concepts and typed relationships, then follow a guided path or choose any concept.
+- Explore a full-screen visual teaching canvas with blue controls and a dismissible details panel. The separate Connections view shows concept relationships.
+- Start with an accessible example, then follow a teaching sequence that is independent of prerequisite order.
 - Read explanations and generated examples separately from original source material.
 - Step through a computed BFS graph, change its inputs, predict the next expansion, and inspect paths.
 - Check concept questions and final practice, then follow specific review links.
+
+The BFS teaching canvas turns actual graph data into delivery landmarks, roads, waiting parcels, discovery marks and distance layers. Other topics retain their own generated guided steps without being mislabeled as algorithm simulations.
 
 The BFS engine uses fixed, tested code with alphabetical neighbor order and discovery on enqueue. It finds paths with the fewest edges in unweighted graphs. Attempts keep the lesson ID and revision; a missed check suggests review and does not assert mastery.
 
