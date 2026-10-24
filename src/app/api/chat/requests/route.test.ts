@@ -70,3 +70,13 @@ test("chat HTTP endpoints reject malformed, oversized, cross-origin and traversa
   const traversal = await get(new Request(url), context("../../notes"));
   assert.equal(traversal.status, 404);
 }));
+
+test("Next bind-address normalization accepts the browser Host but never a forged forwarded origin", async () => localStore(async () => {
+  const normalized = "http://0.0.0.0:3000/api/chat/requests";
+  const created = await create(new Request(normalized, { ...json({ text: "Binary search requires sorted input." }), headers: { Host: "localhost:3000", Origin: "http://localhost:3000" } }));
+  assert.equal(created.status, 201);
+  const malicious = await create(new Request(normalized, { ...json({ text: "Binary search requires sorted input." }), headers: { Host: "localhost:3000", Origin: "https://other.example", "X-Forwarded-Host": "other.example" } }));
+  assert.equal(malicious.status, 403);
+  const wrongPort = await create(new Request(normalized, { ...json({ text: "Binary search requires sorted input." }), headers: { Host: "localhost:3000", Origin: "http://localhost:4000" } }));
+  assert.equal(wrongPort.status, 403);
+}));
