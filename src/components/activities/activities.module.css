@@ -1,10 +1,10 @@
 .lab,
 .question {
-  --lab-ink: var(--ink, #25332b);
-  --lab-muted: #647060;
-  --lab-line: var(--line, #dce2d5);
-  --lab-green: var(--green, #d9edaa);
-  --lab-deep: var(--deep, #344e3c);
+  --lab-ink: var(--ink, #202533);
+  --lab-muted: #697386;
+  --lab-line: var(--line, #dfe4ed);
+  --lab-green: var(--green, #dce7ff);
+  --lab-deep: var(--deep, #2c57d8);
   color: var(--lab-ink);
   font: inherit;
   min-width: 0;
@@ -14,7 +14,7 @@
   border-radius: 12px;
   padding: 18px;
   margin: 22px 0;
-  background: var(--lab-surface, #fafbf6);
+  background: var(--lab-surface, #fbfcff);
   overflow: hidden;
 }
 .heading {
@@ -97,7 +97,7 @@
 .diagramWrap {
   border-radius: 8px;
   margin-top: 16px;
-  background: radial-gradient(circle, #bbc6ae60 0.7px, transparent 0.9px);
+  background: radial-gradient(circle, #bcc6dc60 0.7px, transparent 0.9px);
   background-size: 14px 14px;
   overflow: auto;
 }
@@ -110,7 +110,7 @@
   overflow: visible;
 }
 .edge {
-  stroke: #b6c2ac;
+  stroke: #bdc7da;
   stroke-width: 1.5;
   fill: none;
 }
@@ -124,13 +124,13 @@
   outline: none;
 }
 .nodeCircle {
-  stroke: #a6b39b;
+  stroke: #aebbd2;
   stroke-width: 1.5;
   fill: var(--lab-control, #fff);
 }
 .queued .nodeCircle {
   fill: var(--lab-green);
-  stroke: #809b5a;
+  stroke: #5e7ddb;
 }
 .expanded .nodeCircle {
   fill: var(--lab-deep);
@@ -149,13 +149,13 @@
 }
 .targetRing {
   fill: none;
-  stroke: #78915c;
+  stroke: #5274d8;
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }
 .current .nodeCircle {
   stroke-width: 4;
-  stroke: #88a75c;
+  stroke: #7291ed;
 }
 .graphNode:focus-visible .nodeCircle {
   stroke: #366ed0;
@@ -204,8 +204,8 @@
   overflow-wrap: anywhere;
 }
 .queue > li:first-child {
-  border-color: #8da770;
-  background: #edf4e1;
+  border-color: #7d9aee;
+  background: #eaf0ff;
 }
 .queue li span {
   display: block;
@@ -284,7 +284,7 @@
   cursor: ew-resize;
 }
 .inspector {
-  border-left: 2px solid #94ac74;
+  border-left: 2px solid #8ca6ed;
   padding: 3px 0 3px 12px;
   margin: 18px 0;
 }
@@ -350,9 +350,9 @@
   background: transparent;
 }
 .predictionOptions button[aria-pressed="true"] {
-  border-color: #829e5c;
+  border-color: #6484e5;
   background: var(--lab-green);
-  box-shadow: inset 0 0 0 1px #829e5c;
+  box-shadow: inset 0 0 0 1px #6484e5;
 }
 .lab .feedback,
 .question .feedback {
@@ -363,7 +363,7 @@
   border: 1px solid var(--lab-line);
   border-radius: 7px;
   color: var(--lab-ink);
-  background: var(--lab-feedback, #f0f4e8);
+  background: var(--lab-feedback, #eef3ff);
 }
 .feedback strong {
   font-weight: 600;
@@ -423,8 +423,8 @@
   flex-shrink: 0;
 }
 .answerSelected {
-  background: #edf4e1;
-  border-color: #94ad74;
+  background: #eaf0ff;
+  border-color: #8ca6ed;
 }
 .optionLetter {
   font: 10px monospace;
@@ -460,7 +460,7 @@
 .settings select:focus-visible,
 .answer:focus-within,
 .timeline input:focus-visible {
-  outline: 2px solid #699343;
+  outline: 2px solid #4c70dc;
   outline-offset: 3px;
 }
 @media (max-width: 400px) {

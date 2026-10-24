@@ -33,6 +33,7 @@ test("authored teaching strategy can differ from prerequisite order", () => {
 test("non-BFS lessons and invalid old strategy metadata never claim a BFS example", () => {
   const lesson = {
     ...sampleLesson,
+    teachingPlan: undefined,
     modules: sampleLesson.modules.filter(
       (module) => module.activity.kind !== "bfs",
     ),
