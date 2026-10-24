@@ -6,12 +6,14 @@ import { GenerationError } from "./errors";
 import type { LessonProvider, ProviderRequest } from "./provider";
 import { computeBfs, createBfsQuestions } from "./bfs-questions";
 import { validateLesson } from "./validation";
+import { testLearningDesign } from "./design.test-helpers";
+import type { LearnerProfile } from "../contracts";
 
 function lessonParts(topic: string) {
   const plan = { title: `${topic} study map`, summary: `Learn ${topic} through connected ideas.`, concepts: [
     { id: "foundation", title: `${topic} foundations`, summary: `Start with ${topic}.`, objective: `Explain ${topic}.`, sourceIds: ["source-input"] },
     { id: "application", title: `${topic} in practice`, summary: `Apply ${topic}.`, objective: `Use ${topic} in an example.`, sourceIds: ["source-input"] },
-  ], relations: [{ id: "foundation-application", source: "foundation", target: "application", type: "prerequisite" }], path: ["foundation", "application"], teachingPlan: {
+  ], relations: [{ id: "foundation-application", source: "foundation", target: "application", type: "prerequisite", meaning: "Recognizing the pattern supports applying it to a new situation." }], path: ["foundation", "application"], learningDesign: testLearningDesign(["foundation", "application"]), teachingPlan: {
     openingQuestion: `What would you notice in a concrete example of ${topic}?`,
     bigPicture: `Use a concrete ${topic} situation to recognize a pattern, then explain the mechanism and apply it.`,
     sequence: [{ conceptId: "foundation", approach: "example", purpose: `Notice the ${topic} pattern in a small concrete case.` }, { conceptId: "application", approach: "practice", purpose: `Apply the ${topic} pattern to a new situation.` }],
@@ -127,7 +129,7 @@ test("new plans without teaching strategy get one repair instead of silently cop
 
 test("teaching metadata validates references and purposeful text while older lessons stay compatible", async () => {
   const { lesson } = await generateLesson({ requestId: "teaching-validation", text: "Biology investigates living organisms." }, { provider: providerFor("Biology") });
-  const legacy = structuredClone(lesson); delete legacy.teachingPlan;
+  const legacy = structuredClone(lesson); delete legacy.teachingPlan; delete legacy.learningDesign;
   assert.doesNotThrow(() => validateLesson(legacy, lesson.sources[0].text));
   const mutations = [
     (copy: typeof lesson) => { copy.teachingPlan!.sequence[0].conceptId = "unknown"; },
@@ -143,10 +145,58 @@ test("teaching metadata validates references and purposeful text while older les
   }
 });
 
+test("fixed confidence profile changes route and module guidance, with targeted topic overrides", async () => {
+  const parts = lessonParts("Biology");
+  const contexts: { concept: string; level: string; route: string[] }[] = [];
+  const provider: LessonProvider = { async generate(request) {
+    const payload = JSON.parse(request.input);
+    if (request.schemaName === "study_plan") {
+      const learningDesign = testLearningDesign(["foundation", "application"], payload.learnerProfile);
+      learningDesign.pages[0].conceptIds = ["foundation"];
+      learningDesign.pages[1].conceptIds = ["application"];
+      learningDesign.pages[1].topicIds = [];
+      return { status: "ready", reason: "", plan: { ...parts.plan, learningDesign } };
+    }
+    contexts.push({ concept: payload.targetConceptId, level: payload.learnerContext.effectiveLevel, route: payload.learnerContext.selectedRoute });
+    const module = parts.content.modules.find((item) => item.conceptId === payload.targetConceptId)!;
+    return { module: { ...module, explanation: payload.learnerContext.guidance } };
+  } };
+  const profile: LearnerProfile = { overall: "apply", topics: [{ id: "topic-basics", label: "Underlying mechanism", level: "new" }] };
+  const experienced = await generateLesson({ requestId: "experienced", text: "Biology investigates living organisms.", learnerProfile: profile }, { provider });
+  assert.deepEqual(experienced.lesson.learnerProfile, profile);
+  assert.equal(contexts.find((item) => item.concept === "foundation")?.level, "new");
+  assert.equal(contexts.find((item) => item.concept === "application")?.level, "apply");
+  assert.deepEqual(contexts[0].route, ["transfer"]);
+  assert.match(experienced.lesson.modules[0].explanation, /everyday language/);
+  assert.match(experienced.lesson.modules[1].explanation, /transfer or decision challenge/);
+  contexts.length = 0;
+  const novice = await generateLesson({ requestId: "novice", text: "Biology investigates living organisms.", learnerProfile: { overall: "new", topics: [] } }, { provider });
+  assert.deepEqual(contexts[0].route, ["start", "transfer"]);
+  assert.notEqual(novice.lesson.modules[1].explanation, experienced.lesson.modules[1].explanation);
+});
+
+test("hierarchy is acyclic while contextual support links and concept relations may cycle", async () => {
+  const { lesson } = await generateLesson({ requestId: "hierarchy", text: "Biology investigates living organisms." }, { provider: providerFor("Biology") });
+  const design = lesson.learningDesign!;
+  const support = (id: string, parentId: string, target: string) => ({ ...structuredClone(design.pages[0]), id, parentId, kind: "support" as const, recommendedNextPageId: null, blocks: [{ id: `${id}-context`, kind: "paragraph" as const, segments: [{ kind: "page-link" as const, text: "Follow a supporting explanation", pageId: target, reason: "Clarify the exact mechanism before returning to the original context." }] }] });
+  design.pages.push(support("queue-support", "start", "fifo-support"), support("fifo-support", "queue-support", "start"));
+  lesson.relations.push({ id: "related-back", source: "application", target: "foundation", type: "related" });
+  assert.doesNotThrow(() => validateLesson(lesson, lesson.sources[0].text));
+  const bad = structuredClone(lesson); bad.learningDesign!.pages.find((page) => page.id === "queue-support")!.parentId = "fifo-support";
+  assert.throws(() => validateLesson(bad, lesson.sources[0].text));
+  const mutations = [
+    (copy: typeof lesson) => { copy.learningDesign!.pages[0].topicIds = ["unselected-topic"]; },
+    (copy: typeof lesson) => { copy.learningDesign!.sequence.push({ pageId: "fifo-support", purpose: "Force an optional support page into the main route.", whyNext: "This should remain optional linked support instead." }); },
+    (copy: typeof lesson) => { copy.learningDesign!.pages[0].blocks[0].segments = [{ kind: "page-link", text: "Missing support", pageId: "missing", reason: "This link points to a nonexistent page and must fail." }]; },
+    (copy: typeof lesson) => { copy.learningDesign!.pages[1].blocks[0].id = copy.learningDesign!.pages[0].blocks[0].id; },
+  ];
+  for (const mutate of mutations) { const copy = structuredClone(lesson); mutate(copy); assert.throws(() => validateLesson(copy, lesson.sources[0].text)); }
+});
+
 test("module generation has at most three provider calls in flight", async () => {
   const parts = lessonParts("Biology");
   const concepts = Array.from({ length: 5 }, (_, index) => ({ ...parts.plan.concepts[0], id: `concept-${index}` }));
-  const plan = { ...parts.plan, concepts, path: concepts.map((concept) => concept.id), relations: concepts.slice(1).map((concept, index) => ({ id: `relation-${index}`, source: concepts[index].id, target: concept.id, type: "prerequisite" })), teachingPlan: { ...parts.plan.teachingPlan, sequence: concepts.map((concept) => ({ conceptId: concept.id, approach: "example", purpose: "Recognize a concrete biological pattern before naming it." })) } };
+  const plan = { ...parts.plan, concepts, path: concepts.map((concept) => concept.id), learningDesign: testLearningDesign(concepts.map((concept) => concept.id)), relations: concepts.slice(1).map((concept, index) => ({ id: `relation-${index}`, source: concepts[index].id, target: concept.id, type: "prerequisite", meaning: "This mechanism supports understanding the next observation." })), teachingPlan: { ...parts.plan.teachingPlan, sequence: concepts.map((concept) => ({ conceptId: concept.id, approach: "example", purpose: "Recognize a concrete biological pattern before naming it." })) } };
   let active = 0;
   let peak = 0;
   const provider: LessonProvider = { async generate(request) {
@@ -220,6 +270,7 @@ test("BFS answers use the shared simulation core, including unreachable nodes", 
 
 test("BFS model answer keys are replaced by computed questions", async () => {
   const parts = lessonParts("BFS");
+  parts.plan.learningDesign = testLearningDesign(["foundation", "application"], undefined, { conceptId: "foundation", activity: graph });
   const provider: LessonProvider = { async generate(request) {
     const module = parts.content.modules.find((item) => item.conceptId === JSON.parse(request.input).targetConceptId);
     return request.schemaName === "study_plan" ? { status: "ready", reason: "", plan: parts.plan } : { module: module?.conceptId === "foundation" ? { ...module, activity: graph, questions: [] } : module };

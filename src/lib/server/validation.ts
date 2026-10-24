@@ -1,6 +1,7 @@
 import { LessonSchema, type Lesson, type BfsActivity, type Question } from "../contracts";
 import { GenerationError } from "./errors";
 import { SOURCE_ID } from "./schemas";
+import { validateLearningDesign } from "./design-validation";
 
 export class LessonValidationError extends Error {
   constructor(public readonly issues: string[]) {
@@ -21,6 +22,7 @@ export function validateLesson(candidate: unknown, originalText: string, partial
   check(lesson.concepts.length <= 7, "at most seven concepts");
   unique([...lesson.concepts, ...lesson.relations, ...lesson.modules, ...lesson.modules.flatMap((m) => m.questions), ...lesson.finalQuestions].map((item) => item.id), "entity IDs");
   const concepts = new Set(lesson.concepts.map((concept) => concept.id));
+  validateLearningDesign(lesson, check, partial, validateBfs);
   if (lesson.teachingPlan) {
     const teaching = lesson.teachingPlan;
     const useful = (value: string, min: number, max: number) => value.trim().length >= min && value.length <= max && /\p{L}/u.test(value);
@@ -80,7 +82,7 @@ export function validateLesson(candidate: unknown, originalText: string, partial
   });
   lesson.finalQuestions.forEach((question) => checkQuestion(question));
   // Source text may contain unverified URLs; generated content must not invent links.
-  const authored = JSON.stringify({ concepts: lesson.concepts, modules: lesson.modules, finalQuestions: lesson.finalQuestions, title: lesson.title, summary: lesson.summary, teachingPlan: lesson.teachingPlan });
+  const authored = JSON.stringify({ concepts: lesson.concepts, modules: lesson.modules, finalQuestions: lesson.finalQuestions, title: lesson.title, summary: lesson.summary, teachingPlan: lesson.teachingPlan, learningDesign: lesson.learningDesign });
   check(!/https?:\/\//i.test(authored), "generated content must not introduce unverified URLs");
   if (issues.length) throw new LessonValidationError(issues.slice(0, 15));
   return lesson;

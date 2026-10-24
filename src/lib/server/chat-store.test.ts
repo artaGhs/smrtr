@@ -6,6 +6,7 @@ import path from "node:path";
 import type { Lesson } from "../contracts";
 import { cancelChatRequest, createChatRequest, failChatRequest, getChatGenerationInstructions, getChatRequest, listPendingChatRequests, publicChatRequest, submitChatLesson, type ChatRequest, type ChatStoreOptions } from "./chat-store";
 import { GenerationError } from "./errors";
+import { testLearningDesign, testTeachingPlan } from "./design.test-helpers";
 
 async function temporary(run: (options: ChatStoreOptions) => Promise<void>) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "smrtr-store-test-"));
@@ -14,7 +15,7 @@ async function temporary(run: (options: ChatStoreOptions) => Promise<void>) {
 }
 
 function authored(request: ChatRequest): Lesson {
-  return { id: "chat-authored-id", revision: request.revision, mode: "generated", title: "An input-specific study map", summary: "A focused explanation of the submitted topic.", sources: [{ id: "source-input", title: "Untrusted author source", text: "This will be replaced by exact original input." }], concepts: [{ id: "idea", title: "Core idea", summary: "Understand the central idea", objective: "Explain the idea in your own words", sourceIds: ["source-input"] }], relations: [], path: ["idea"], modules: [{ id: "module-idea", conceptId: "idea", explanation: "A fresh explanation of the central idea.", example: "Generated example: apply the idea to a simple case.", sourceIds: ["source-input"], activity: { kind: "concept", prompt: "Explore the idea", steps: [{ title: "Observe", body: "Observe a useful example." }] }, questions: [{ id: "question-idea", conceptIds: ["idea"], prompt: "Which statement describes the idea?", options: [{ id: "a", text: "The accurate idea" }, { id: "b", text: "An unrelated claim" }], correctOptionIds: ["a"], explanation: "The first answer describes the idea." }] }], finalQuestions: [{ id: "final-idea", conceptIds: ["idea"], prompt: "Apply the central idea.", options: [{ id: "a", text: "A valid application" }, { id: "b", text: "An unrelated action" }], correctOptionIds: ["a"], explanation: "This applies the idea to a case." }] };
+  return { id: "chat-authored-id", revision: request.revision, mode: "generated", title: "An input-specific study map", summary: "A focused explanation of the submitted topic.", teachingPlan: testTeachingPlan(["idea"]), learningDesign: testLearningDesign(["idea"], request.learnerProfile), sources: [{ id: "source-input", title: "Untrusted author source", text: "This will be replaced by exact original input." }], concepts: [{ id: "idea", title: "Core idea", summary: "Understand the central idea", objective: "Explain the idea in your own words", sourceIds: ["source-input"] }], relations: [], path: ["idea"], modules: [{ id: "module-idea", conceptId: "idea", explanation: "A fresh explanation of the central idea.", example: "Generated example: apply the idea to a simple case.", sourceIds: ["source-input"], activity: { kind: "concept", prompt: "Explore the idea", steps: [{ title: "Observe", body: "Observe a useful example." }] }, questions: [{ id: "question-idea", conceptIds: ["idea"], prompt: "Which statement describes the idea?", options: [{ id: "a", text: "The accurate idea" }, { id: "b", text: "An unrelated claim" }], correctOptionIds: ["a"], explanation: "The first answer describes the idea." }] }], finalQuestions: [{ id: "final-idea", conceptIds: ["idea"], prompt: "Apply the central idea.", options: [{ id: "a", text: "A valid application" }, { id: "b", text: "An unrelated action" }], correctOptionIds: ["a"], explanation: "This applies the idea to a case." }] };
 }
 
 const code = (expected: string) => (error: unknown) => error instanceof GenerationError && error.code === expected;
@@ -74,6 +75,32 @@ test("chat teaching strategy survives submit and reload while invalid metadata r
   assert.deepEqual((await getChatRequest(request.id, options)).lesson!.teachingPlan, lesson.teachingPlan);
 }));
 
+test("new request snapshots profile before fulfillment and ignores submitted profile replacement", async () => temporary(async (options) => {
+  const profile = { overall: "apply" as const, topics: [{ id: "queue-topic", label: "Queue", level: "new" as const }] };
+  const request = await createChatRequest({ text: "Photosynthesis captures energy from sunlight.", learnerProfile: profile }, options);
+  profile.topics[0].label = "mutated after creation";
+  const loaded = await getChatRequest(request.id, options);
+  assert.equal(loaded.learnerProfile!.topics[0].label, "Queue");
+  assert.equal(publicChatRequest(loaded).learnerProfile!.overall, "apply");
+  const exported = getChatGenerationInstructions(loaded);
+  assert.deepEqual(exported.request.learnerProfile, loaded.learnerProfile);
+  assert.deepEqual(exported.requiredMetadata.learnerProfile, loaded.learnerProfile);
+  const lesson = authored(loaded); lesson.learnerProfile = { overall: "new", topics: [] };
+  const result = await submitChatLesson(request.id, { revision: request.revision, lesson }, options);
+  assert.deepEqual(result.lesson!.learnerProfile, loaded.learnerProfile);
+}));
+
+test("v2 requires authored design while legacy v1 requests accept old lesson shapes", async () => temporary(async (options) => {
+  const request = await createChatRequest({ text: "Photosynthesis captures energy from sunlight." }, options);
+  const legacyLesson = authored(request); delete legacyLesson.learningDesign; delete legacyLesson.teachingPlan;
+  await assert.rejects(submitChatLesson(request.id, { revision: request.revision, lesson: legacyLesson }, options), code("INVALID_CHAT_LESSON"));
+  const legacyRequest = { ...request, version: 1, designRequired: undefined, learnerProfile: undefined };
+  await writeFile(path.join(options.directory!, `${request.id}.json`), JSON.stringify(legacyRequest), "utf8");
+  const completed = await submitChatLesson(request.id, { revision: request.revision, lesson: legacyLesson }, options);
+  assert.equal(completed.state, "completed");
+  assert.equal(completed.lesson!.learningDesign, undefined);
+}));
+
 test("canceled, stale, expired and completed requests reject late completion", async () => temporary(async (options) => {
   const request = await createChatRequest({ text: "Photosynthesis captures energy from sunlight." }, options);
   await assert.rejects(submitChatLesson(request.id, { revision: "old-revision", lesson: authored(request) }, options), code("CHAT_REQUEST_STALE"));
@@ -95,6 +122,7 @@ test("BFS submissions discard authored traversal keys and compute actual graph a
   const request = await createChatRequest({ text: "Breadth-first search (BFS) visits nodes in an unweighted graph." }, options);
   const lesson = authored(request);
   lesson.modules[0].activity = { kind: "bfs", nodes: ["S", "A", "B"], edges: [{ source: "S", target: "B" }, { source: "S", target: "A" }], start: "S", directed: true, neighborOrder: "alphabetical", visitedOn: "enqueue" };
+  lesson.learningDesign = testLearningDesign(["idea"], request.learnerProfile, { conceptId: "idea", activity: lesson.modules[0].activity });
   lesson.modules[0].questions[0].correctOptionIds = ["totally-wrong"];
   const updated = await submitChatLesson(request.id, { revision: request.revision, lesson }, options);
   const question = updated.lesson!.modules[0].questions[0];

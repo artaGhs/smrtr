@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { POST } from "./route";
 import { GenerationEventSchema, GenerationResponseSchema } from "../../../lib/contracts";
+import { testLearningDesign } from "../../../lib/server/design.test-helpers";
 
 test("route returns malformed JSON and invalid input as non-2xx actionable errors", async () => {
   const malformed = await POST(new Request("http://localhost/api/generate", { method: "POST", body: "{" }));
@@ -17,7 +18,7 @@ test("real adapter and HTTP route deliver validated plan before module, then com
   const previousFetch = globalThis.fetch;
   process.env.OPENAI_API_KEY = "mock-server-only-key";
   const sourceText = "  Photosynthesis converts light into stored chemical energy.\n  ";
-  const plan = { title: "Photosynthesis", summary: "Light to chemical energy", concepts: [{ id: "light", title: "Capturing light", summary: "Pigments absorb light", objective: "Explain light capture", sourceIds: ["source-input"] }], relations: [], path: ["light"], teachingPlan: { openingQuestion: "Why does a plant in the dark grow differently?", bigPicture: "Connect a familiar plant to light capture and the chemical energy that supports growth.", sequence: [{ conceptId: "light", approach: "example", purpose: "Compare leaves in light and shade before naming the pigment mechanism." }] } };
+  const plan = { title: "Photosynthesis", summary: "Light to chemical energy", concepts: [{ id: "light", title: "Capturing light", summary: "Pigments absorb light", objective: "Explain light capture", sourceIds: ["source-input"] }], relations: [], path: ["light"], learningDesign: testLearningDesign(["light"]), teachingPlan: { openingQuestion: "Why does a plant in the dark grow differently?", bigPicture: "Connect a familiar plant to light capture and the chemical energy that supports growth.", sequence: [{ conceptId: "light", approach: "example", purpose: "Compare leaves in light and shade before naming the pigment mechanism." }] } };
   const module = { id: "module-light", conceptId: "light", explanation: "Chlorophyll absorbs light energy.", example: "Generated example: compare a leaf in light and dark.", sourceIds: ["source-input"], activity: { kind: "concept", prompt: "Follow energy", steps: [{ title: "Absorb", body: "Pigments absorb light." }] }, questions: [{ id: "question-light-1", conceptIds: ["light"], prompt: "What do pigments absorb?", options: [{ id: "a", text: "Light energy" }, { id: "b", text: "Sound waves" }], correctOptionIds: ["a"], explanation: "Pigments absorb light." }] };
   let releaseModule!: () => void;
   const gate = new Promise<void>((resolve) => { releaseModule = resolve; });

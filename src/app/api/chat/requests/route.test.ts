@@ -8,6 +8,7 @@ import { POST as create } from "./route";
 import { GET as get, DELETE as cancel } from "./[id]/route";
 import { GET as exportRequest } from "./[id]/export/route";
 import { POST as submit } from "./[id]/lesson/route";
+import { testLearningDesign, testTeachingPlan } from "@/lib/server/design.test-helpers";
 
 async function localStore(run: () => Promise<void>) {
   const previous = process.env.SMRTR_BRIDGE_DIR;
@@ -35,7 +36,9 @@ test("keyless HTTP create, export, validated import and poll complete without a 
   const payload = await exported.json();
   assert.equal(payload.untrustedInput.text, text);
   const lesson: Lesson = { ...payload.requiredMetadata, title: "Binary search", summary: "Reduce a sorted interval by half.", concepts: [{ id: "halving", title: "Halving the interval", summary: "Discard the impossible half", objective: "Explain why sorted order allows halving", sourceIds: ["source-input"] }], relations: [], path: ["halving"], modules: [{ id: "module-halving", conceptId: "halving", explanation: "Compare the target with the middle element of a sorted interval, then retain only the half that may contain it.", example: "Generated example: search for 7 in [1,3,5,7,9].", sourceIds: ["source-input"], activity: { kind: "concept", prompt: "Shrink the interval", steps: [{ title: "Compare", body: "Compare 7 with the middle value 5, then retain the upper half." }] }, questions: [{ id: "question-halving", conceptIds: ["halving"], prompt: "What assumption permits binary search to discard half?", options: [{ id: "sorted", text: "The input is sorted" }, { id: "random", text: "The input has random order" }], correctOptionIds: ["sorted"], explanation: "Sorted order determines which half can contain the target." }] }], finalQuestions: [{ id: "final-halving", conceptIds: ["halving"], prompt: "How does the candidate interval change after each comparison?", options: [{ id: "half", text: "It is approximately halved" }, { id: "double", text: "It doubles" }], correctOptionIds: ["half"], explanation: "One comparison identifies the half that may contain the target." }] };
-  const submitted = await submit(new Request(`${url}/${waiting.id}/lesson`, json({ lesson })), context(waiting.id));
+    lesson.teachingPlan = testTeachingPlan(["halving"]);
+    lesson.learningDesign = testLearningDesign(["halving"]);
+    const submitted = await submit(new Request(`${url}/${waiting.id}/lesson`, json({ lesson })), context(waiting.id));
   assert.equal(submitted.status, 200);
   const complete = ChatRequestSchema.parse(await submitted.json());
   assert.equal(complete.status, "completed");

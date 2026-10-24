@@ -1,14 +1,15 @@
 import { z } from "zod";
-import { ConceptSchema, LessonModuleSchema, QuestionSchema, RelationSchema, TeachingPlanSchema } from "../contracts";
+import { ConceptSchema, LessonModuleSchema, QuestionSchema, RelationSchema, TeachingPlanSchema, LearningDesignSchema } from "../contracts";
 
 // The provider never authors source records, lesson identity, or revision metadata.
 export const PlanSchema = z.object({
   title: z.string().min(1).max(160),
   summary: z.string().min(1).max(1200),
   concepts: z.array(ConceptSchema).min(1).max(7),
-  relations: z.array(RelationSchema).max(30),
+  relations: z.array(RelationSchema.extend({ meaning: z.string().min(8).max(500) })).max(30),
   path: z.array(z.string()).min(1).max(7),
   teachingPlan: TeachingPlanSchema,
+  learningDesign: LearningDesignSchema,
 });
 
 export const PlanResultSchema = z.object({
@@ -55,6 +56,12 @@ Start with an accessible concrete situation and a big-picture question the learn
 The teaching sequence is a deliberate instructional strategy, independent of the relationship graph and prerequisite path. It may introduce a concrete application before naming its underlying prerequisite; prerequisite edges and path still describe genuine conceptual dependencies. Do not copy path order by habit or change prerequisite edges merely to match presentation order.
 Choose each teaching approach and purpose for this input: an example exposes a concrete pattern, a visual makes a process or relationship visible, an explanation names the mechanism after intuition, and practice asks the learner to apply or retrieve it. Give every step a specific learner outcome and reason for that approach; avoid generic purposes such as "learn the concept".
 Modules must actually teach using their assigned approach and purpose, referring back to the opening situation. Do not merely attach teaching metadata to the same definition-first lecture. Concept activity steps should invite a prediction, comparison, observation, or application and then reveal the reasoning.
+Author a learningDesign for every new lesson. Keep THREE distinct structures: an intentional teaching sequence, an acyclic page containment hierarchy, and typed concept relationships that may cycle. Do not flatten them into one list.
+State a central question, an observable learning objective, and explicit assumedKnowledge. Reuse ONE continuing concrete scenario across overview/core/support pages, with stable scenario entities, names and inputs; for BFS this can be a delivery network. Introduce the learner's problem, intuitive layers, questions, then graph/queue/visited mechanisms, why it works and its limits, and finally transfer. A transfer page may explicitly apply the idea to a different labeled generated network; core/support must retain the canonical scenario.
+learningDesign.scenario.activity and activityConceptId are canonical: use null for both if no interactive activity is useful, or specify one actual ActivitySpec and its existing concept ID. Its matching module must reuse exactly those inputs. All core/support page activityConceptIds must refer to that canonical activity or be null. Only transfer pages may bind a different existing activity concept. For BFS scenario entities must use the graph node IDs.
+Create at most eighteen rich but bounded pages with one overview root, real parent IDs and no containment cycles. Support pages can nest (for example Queue -> FIFO) and are optional context-linked detours, not mandatory main-route steps. Page concepts and sourceIds must exist; topicIds must use only stable IDs from learnerProfile.topics. Explain prose through paragraph/callout blocks with stable globally unique block IDs, text segments, and page-link segments with a reason a learner would open that support. Links may cycle for returns; containment must not. Keep the original scenario and exact context meaningful when the learner returns.
+The main page sequence contains every overview/core/transfer page once and no support pages, with specific purpose and whyNext transitions. Supply four confidence routes (new, recognize, explain, apply), containing existing main pages only. The new route follows the complete problem-to-transfer progression; experienced routes must change entry point, emphasis and work substantively rather than relabel the same novice tour. Use manual topic overrides to offer targeted support without forcing repeated basics.
+learnerProfile is immutable self-report, not a mastery diagnosis. Respect the overall confidence level and each topic override; null topic levels inherit overall. New learners need familiar language, small predictions and linked definitions before abstractions; recognize needs connections/mechanism; explain needs why/invariants/limits; apply needs transfer, decisions and assumptions with basics as optional detours. Never turn self-report or one missed answer into a proven mastery claim.
 Relations may be prerequisite, related, contrast, or example. A prerequisite goes from the earlier prerequisite to its dependent; never create prerequisite cycles.
 Use prerequisite edges for actual dependencies, not merely to make the map look connected. Related/contrast/example edges may cycle.
 Content must fit the supplied topic, with no unrelated canned lesson. Never force a topic into breadth-first search.
