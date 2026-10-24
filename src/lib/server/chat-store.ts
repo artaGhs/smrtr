@@ -120,7 +120,7 @@ function prepareChatLesson(candidate: unknown, request: ChatRequest): Lesson {
   // A previous export may already contain computed questions; replace their keys once.
   const computedIds = new Set(computedFinal.map((question) => question.id));
   const lesson = validateLesson({ ...parsed.data, id: `lesson-${request.id}`, revision: request.revision, mode: "generated", origin: "chat", sources: [{ id: SOURCE_ID, title: "Your submitted notes or topic", text: request.text }], modules, finalQuestions: [...computedFinal, ...parsed.data.finalQuestions.filter((question) => !computedIds.has(question.id))].slice(0, 5) }, request.text);
-  return { ...lesson, origin: "chat" } as Lesson;
+  return { ...lesson, origin: "chat" };
 }
 
 export async function submitChatLesson(id: string, input: { revision: string; lesson: unknown }, options: ChatStoreOptions = {}): Promise<ChatRequest> {
@@ -131,7 +131,7 @@ export async function submitChatLesson(id: string, input: { revision: string; le
     try { lesson = prepareChatLesson(input.lesson, request); }
     catch (error) {
       if (error instanceof GenerationError && error.code === "CHAT_LESSON_TOO_LARGE") throw error;
-      const detail = error instanceof LessonValidationError ? ` ${error.issues.join("; ")}` : " Check the BFS activity inputs.";
+      const detail = error instanceof LessonValidationError ? ` ${error.issues.join("; ")}` : " Check lesson structure and activity inputs.";
       throw new GenerationError("INVALID_CHAT_LESSON", `The lesson did not pass validation.${detail}`, 422);
     }
     const updated: ChatRequest = { ...request, state: "completed", lesson, updatedAt: now(options).toISOString() };
