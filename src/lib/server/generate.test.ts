@@ -11,7 +11,11 @@ function lessonParts(topic: string) {
   const plan = { title: `${topic} study map`, summary: `Learn ${topic} through connected ideas.`, concepts: [
     { id: "foundation", title: `${topic} foundations`, summary: `Start with ${topic}.`, objective: `Explain ${topic}.`, sourceIds: ["source-input"] },
     { id: "application", title: `${topic} in practice`, summary: `Apply ${topic}.`, objective: `Use ${topic} in an example.`, sourceIds: ["source-input"] },
-  ], relations: [{ id: "foundation-application", source: "foundation", target: "application", type: "prerequisite" }], path: ["foundation", "application"] };
+  ], relations: [{ id: "foundation-application", source: "foundation", target: "application", type: "prerequisite" }], path: ["foundation", "application"], teachingPlan: {
+    openingQuestion: `What would you notice in a concrete example of ${topic}?`,
+    bigPicture: `Use a concrete ${topic} situation to recognize a pattern, then explain the mechanism and apply it.`,
+    sequence: [{ conceptId: "foundation", approach: "example", purpose: `Notice the ${topic} pattern in a small concrete case.` }, { conceptId: "application", approach: "practice", purpose: `Apply the ${topic} pattern to a new situation.` }],
+  } };
   const question = (id: string, conceptId: string) => ({ id, conceptIds: [conceptId], prompt: `Which statement explains ${topic}?`, options: [{ id: "a", text: `An accurate ${topic} statement` }, { id: "b", text: "An unrelated claim" }], correctOptionIds: ["a"], explanation: `The first option explains ${topic}.` });
   const content = {
     modules: plan.concepts.map((concept) => ({ id: `module-${concept.id}`, conceptId: concept.id, explanation: `Explanation of ${topic}.`, example: `Generated example of ${topic}.`, sourceIds: ["source-input"], activity: { kind: "concept", prompt: `Explore ${topic}`, steps: [{ title: "Observe", body: `An observation about ${topic}.` }] }, questions: [question(`question-${concept.id}`, concept.id)] })),
@@ -81,10 +85,68 @@ test("modules publish independently as they finish and final lesson retains plan
   assert.deepEqual(result.lesson.modules.map((module) => module.conceptId), ["foundation", "application"]);
 });
 
+test("teaching order can introduce an example before its prerequisite without changing the concept path", async () => {
+  const parts = lessonParts("Biology");
+  const teachingPlan = { ...parts.plan.teachingPlan, sequence: [
+    { conceptId: "application", approach: "example", purpose: "Predict what happens in a familiar living system before naming the mechanism." },
+    { conceptId: "foundation", approach: "explanation", purpose: "Explain the hidden mechanism responsible for the pattern just observed." },
+  ] };
+  const moduleRequests: Record<string, unknown>[] = [];
+  const provider: LessonProvider = { async generate(request) {
+    if (request.schemaName === "study_plan") return { status: "ready", reason: "", plan: { ...parts.plan, teachingPlan } };
+    const payload = JSON.parse(request.input);
+    moduleRequests.push(payload);
+    const original = parts.content.modules.find((module) => module.conceptId === payload.targetConceptId)!;
+    return { module: { ...original, explanation: `Teaching purpose: ${payload.teachingStep.purpose}` } };
+  } };
+  const { lesson } = await generateLesson({ requestId: "teaching-order", text: "Biology investigates living organisms." }, { provider });
+  assert.deepEqual(lesson.path, ["foundation", "application"]);
+  assert.deepEqual(lesson.teachingPlan, teachingPlan);
+  assert.deepEqual(lesson.modules.map((module) => module.conceptId), ["application", "foundation"]);
+  assert.deepEqual(moduleRequests.map((payload) => payload.teachingPosition), [0, 1]);
+  assert.deepEqual(moduleRequests[0].teachingStep, teachingPlan.sequence[0]);
+  assert.match(lesson.modules[0].explanation, /familiar living system/);
+  assert.equal(lesson.relations[0].source, "foundation");
+});
+
+test("new plans without teaching strategy get one repair instead of silently copying prerequisite order", async () => {
+  const parts = lessonParts("Biology");
+  let planCalls = 0;
+  const provider: LessonProvider = { async generate(request) {
+    if (request.schemaName === "study_plan") {
+      planCalls++;
+      if (planCalls === 1) { const { teachingPlan: omitted, ...legacyPlan } = parts.plan; void omitted; return { status: "ready", reason: "", plan: legacyPlan }; }
+      return { status: "ready", reason: "", plan: parts.plan };
+    }
+    return { module: parts.content.modules.find((module) => module.conceptId === JSON.parse(request.input).targetConceptId) };
+  } };
+  const { lesson } = await generateLesson({ requestId: "teaching-repair", text: "Biology investigates living organisms." }, { provider });
+  assert.equal(planCalls, 2);
+  assert.deepEqual(lesson.teachingPlan, parts.plan.teachingPlan);
+});
+
+test("teaching metadata validates references and purposeful text while older lessons stay compatible", async () => {
+  const { lesson } = await generateLesson({ requestId: "teaching-validation", text: "Biology investigates living organisms." }, { provider: providerFor("Biology") });
+  const legacy = structuredClone(lesson); delete legacy.teachingPlan;
+  assert.doesNotThrow(() => validateLesson(legacy, lesson.sources[0].text));
+  const mutations = [
+    (copy: typeof lesson) => { copy.teachingPlan!.sequence[0].conceptId = "unknown"; },
+    (copy: typeof lesson) => { copy.teachingPlan!.sequence[1].conceptId = copy.teachingPlan!.sequence[0].conceptId; },
+    (copy: typeof lesson) => { copy.teachingPlan!.sequence.pop(); },
+    (copy: typeof lesson) => { copy.teachingPlan!.openingQuestion = "   "; },
+    (copy: typeof lesson) => { copy.teachingPlan!.bigPicture = "   "; },
+    (copy: typeof lesson) => { copy.teachingPlan!.sequence[0].purpose = "  "; },
+  ];
+  for (const mutate of mutations) {
+    const copy = structuredClone(lesson); mutate(copy);
+    assert.throws(() => validateLesson(copy, lesson.sources[0].text));
+  }
+});
+
 test("module generation has at most three provider calls in flight", async () => {
   const parts = lessonParts("Biology");
   const concepts = Array.from({ length: 5 }, (_, index) => ({ ...parts.plan.concepts[0], id: `concept-${index}` }));
-  const plan = { ...parts.plan, concepts, path: concepts.map((concept) => concept.id), relations: concepts.slice(1).map((concept, index) => ({ id: `relation-${index}`, source: concepts[index].id, target: concept.id, type: "prerequisite" })) };
+  const plan = { ...parts.plan, concepts, path: concepts.map((concept) => concept.id), relations: concepts.slice(1).map((concept, index) => ({ id: `relation-${index}`, source: concepts[index].id, target: concept.id, type: "prerequisite" })), teachingPlan: { ...parts.plan.teachingPlan, sequence: concepts.map((concept) => ({ conceptId: concept.id, approach: "example", purpose: "Recognize a concrete biological pattern before naming it." })) } };
   let active = 0;
   let peak = 0;
   const provider: LessonProvider = { async generate(request) {

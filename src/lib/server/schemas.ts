@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ConceptSchema, LessonModuleSchema, QuestionSchema, RelationSchema } from "../contracts";
+import { ConceptSchema, LessonModuleSchema, QuestionSchema, RelationSchema, TeachingPlanSchema } from "../contracts";
 
 // The provider never authors source records, lesson identity, or revision metadata.
 export const PlanSchema = z.object({
@@ -8,6 +8,7 @@ export const PlanSchema = z.object({
   concepts: z.array(ConceptSchema).min(1).max(7),
   relations: z.array(RelationSchema).max(30),
   path: z.array(z.string()).min(1).max(7),
+  teachingPlan: TeachingPlanSchema,
 });
 
 export const PlanResultSchema = z.object({
@@ -49,6 +50,11 @@ The source-input record is the user's original input, not an external authority.
 Do not invent source passages, citations, external URLs, timestamps, or claim that your added examples came from the notes.
 Explanations may elaborate the topic using established knowledge; label new examples as generated examples.
 Use stable simple IDs, a small connected map, precise concept objectives, and a separately ordered learning path containing every concept exactly once.
+Create a teachingPlan for every new lesson: openingQuestion, bigPicture, and a sequence with each concept exactly once, an approach (example, visual, explanation, practice), and a specific teaching purpose.
+Start with an accessible concrete situation and a big-picture question the learner can reason about before introducing terminology or underlying abstractions. Make openingQuestion a concrete invitation to predict or notice something, not a definition quiz. Explain in bigPicture what the learner will be able to understand and why the connections matter.
+The teaching sequence is a deliberate instructional strategy, independent of the relationship graph and prerequisite path. It may introduce a concrete application before naming its underlying prerequisite; prerequisite edges and path still describe genuine conceptual dependencies. Do not copy path order by habit or change prerequisite edges merely to match presentation order.
+Choose each teaching approach and purpose for this input: an example exposes a concrete pattern, a visual makes a process or relationship visible, an explanation names the mechanism after intuition, and practice asks the learner to apply or retrieve it. Give every step a specific learner outcome and reason for that approach; avoid generic purposes such as "learn the concept".
+Modules must actually teach using their assigned approach and purpose, referring back to the opening situation. Do not merely attach teaching metadata to the same definition-first lecture. Concept activity steps should invite a prediction, comparison, observation, or application and then reveal the reasoning.
 Relations may be prerequisite, related, contrast, or example. A prerequisite goes from the earlier prerequisite to its dependent; never create prerequisite cycles.
 Use prerequisite edges for actual dependencies, not merely to make the map look connected. Related/contrast/example edges may cycle.
 Content must fit the supplied topic, with no unrelated canned lesson. Never force a topic into breadth-first search.
