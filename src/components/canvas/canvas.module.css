@@ -898,3 +898,19 @@
   color: #8b98ae;
   white-space: nowrap;
 }
+
+.pageCanvas {
+  min-height: 0;
+}
+.pageScene {
+  height: 850px;
+}
+.pageScene .sceneHeader {
+  display: none;
+}
+.pageCanvas .mobilePlayback {
+  bottom: 8px;
+}
+.pageCanvas .canvasHint {
+  display: none;
+}

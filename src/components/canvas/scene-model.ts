@@ -172,7 +172,23 @@ export function teachingViewport(
   width: number,
   height: number,
   mobile: boolean,
+  pageScene?: PageScene,
 ) {
+  if (pageScene !== undefined) {
+    const zoom = mobile
+      ? Math.max(0.18, Math.min(0.72, (width - 24) / 620))
+      : Math.max(0.18, Math.min((width - 30) / 1320, (height - 35) / 850, 1.1));
+    const top = mobile
+      ? pageScene === "queue"
+        ? (height - 80 - 155 * zoom) / 2 - 440 * zoom
+        : 8 - (pageScene === "explanation" ? 0 : 90) * zoom
+      : (height - 850 * zoom) / 2;
+    return {
+      x: (mobile ? 12 : (width - 1320 * zoom) / 2) - index * 1540 * zoom,
+      y: top - (index % 2 ? 70 : 0) * zoom,
+      zoom,
+    };
+  }
   const zoom = mobile
     ? Math.max(0.18, Math.min(0.72, (width - 24) / 620))
     : Math.max(0.18, Math.min((width - 90) / 1320, (height - 200) / 940, 1.1));

@@ -2,7 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Lesson, SimulationState } from "../../lib/contracts";
 import { sampleLesson } from "../../lib/fixtures/sample-lesson";
-import { pageCanvasScenes, lessonBfsActivity } from "./scene-model";
+import {
+  pageCanvasScenes,
+  lessonBfsActivity,
+  teachingViewport,
+} from "./scene-model";
 import {
   changeSimulationState,
   defaultSimulationState,
@@ -117,4 +121,16 @@ test("restored or legacy state is bounded without mutating its source", () => {
     normalizeSimulationState(graph, { ...legacy, step: NaN }).step,
     0,
   );
+});
+
+test("hierarchy framing uses the bounded canvas pane rather than global viewport offsets", () => {
+  const desktop = teachingViewport(0, 1000, 700, false, "scenario");
+  assert.ok(desktop.y >= 0 && desktop.y + 850 * desktop.zoom <= 700);
+  assert.ok(desktop.zoom > 0.7);
+  const mobile = teachingViewport(0, 360, 280, true, "scenario");
+  assert.equal(mobile.y + 90 * mobile.zoom, 8);
+  assert.ok(mobile.y + (90 + 350) * mobile.zoom < 208);
+  const queue = teachingViewport(0, 360, 280, true, "queue");
+  assert.ok(queue.y + 440 * queue.zoom >= 0);
+  assert.ok(queue.y + (440 + 155) * queue.zoom < 208);
 });
