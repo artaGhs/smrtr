@@ -198,3 +198,25 @@ test("saved study sessions preserve attempt revision and tolerate corrupted stor
     ),
   );
 });
+
+test("an unfinished manual confidence edit cannot make the completed lesson unrecoverable", () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (id: string) => values.get(id) ?? null,
+    setItem: (id: string, value: string) => {
+      values.set(id, value);
+    },
+  };
+  saveSession(storage, {
+    lesson: sampleLesson,
+    input: request.text,
+    selectedConceptId: "bfs",
+    attempts: [],
+    learnerProfile: {
+      overall: "new",
+      topics: [{ id: "stable-topic", label: "", level: null }],
+    },
+  });
+  assert.equal(readSession(storage)?.lesson.id, sampleLesson.id);
+  assert.equal(readSession(storage)?.learnerProfile, undefined);
+});

@@ -41,9 +41,15 @@ export function saveSession(
   session: SavedSession,
 ) {
   try {
+    const { learnerProfile, ...completedSession } = session;
+    const profile = LearnerProfileSchema.safeParse(learnerProfile);
     storage.setItem(
       SESSION_KEY,
-      JSON.stringify({ ...session, attempts: session.attempts.slice(-1000) }),
+      JSON.stringify({
+        ...completedSession,
+        ...(profile.success ? { learnerProfile: profile.data } : {}),
+        attempts: session.attempts.slice(-1000),
+      }),
     );
   } catch {
     /* A full or disabled browser store should not interrupt studying. */
