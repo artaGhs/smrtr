@@ -13,7 +13,11 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import type { BfsActivity, LearningCanvasProps } from "../../lib/contracts";
+import type {
+  BfsActivity,
+  LearningCanvasProps,
+  SimulationState,
+} from "../../lib/contracts";
 import { getTeachingPlan } from "../../lib/teaching/sequence";
 import {
   evaluateNextExpansion,
@@ -21,15 +25,18 @@ import {
   type BfsTrace,
 } from "../../lib/simulation/bfs";
 import {
-  buildCanvasScenes,
-  defaultRouteTarget,
+  pageCanvasScenes,
   experimentGraph,
-  lessonBfsActivity,
   knownDistance,
   safeBfsTrace,
   teachingViewport,
   type CanvasScene,
 } from "./scene-model";
+import {
+  changeSimulationState,
+  normalizeSimulationState,
+  resolveScenarioActivity,
+} from "./simulation-state";
 import { Conveyor, DeliveryMap, Parcel } from "./Illustrations";
 import styles from "./canvas.module.css";
 
@@ -62,18 +69,25 @@ export function LearningCanvas(props: LearningCanvasProps) {
     </ReactFlowProvider>
   );
 }
-type SimulationState = {
-  start: string;
-  directed: boolean;
-  variant: string;
-  step: number;
-  target: string;
-};
 function CanvasBoard(props: LearningCanvasProps) {
-  const scenes = useMemo(() => buildCanvasScenes(props.lesson), [props.lesson]);
-  const initial = useMemo(
-    () => lessonBfsActivity(props.lesson),
-    [props.lesson],
+  const scenes = useMemo(
+    () =>
+      pageCanvasScenes(
+        props.lesson,
+        props.pageScene,
+        props.selectedConceptId,
+        props.activeSceneIndex,
+      ),
+    [
+      props.lesson,
+      props.pageScene,
+      props.selectedConceptId,
+      props.activeSceneIndex,
+    ],
+  );
+  const scenario = useMemo(
+    () => resolveScenarioActivity(props.lesson, props.activityConceptId),
+    [props.lesson, props.activityConceptId],
   );
   const teaching = useMemo(() => getTeachingPlan(props.lesson), [props.lesson]);
   const [configurations, setConfigurations] = useState<
@@ -85,20 +99,30 @@ function CanvasBoard(props: LearningCanvasProps) {
   const nodes = useMemo<TeachingNode[]>(
     () =>
       scenes.map((scene) => {
-        const activity =
+        const ownActivity =
+          props.pageScene === undefined &&
+          !props.activityConceptId &&
           scene.module?.activity.kind === "bfs"
-            ? scene.module.activity
-            : initial;
-        const signature = activity ? JSON.stringify(activity) : "none";
-        const original = safeBfsTrace(activity);
-        const defaults: SimulationState = {
-          start: activity?.start ?? "",
-          directed: activity?.directed ?? true,
-          variant: "original",
-          step: 0,
-          target: original ? defaultRouteTarget(original) : "",
-        };
-        const configuration = configurations[signature] ?? defaults;
+            ? {
+                activityConceptId: scene.module.conceptId,
+                activity: scene.module.activity,
+              }
+            : scenario;
+        const activity = ownActivity?.activity ?? null;
+        const stateKey = ownActivity?.activityConceptId ?? "none";
+        const supplied =
+          props.simulations !== undefined || props.onSimulationChange
+            ? props.simulations?.[stateKey]
+            : configurations[stateKey];
+        const configuration = activity
+          ? normalizeSimulationState(activity, supplied)
+          : {
+              start: "",
+              directed: true,
+              variant: "original",
+              step: 0,
+              target: "",
+            };
         const graph = activity
           ? experimentGraph(
               activity,
@@ -108,27 +132,27 @@ function CanvasBoard(props: LearningCanvasProps) {
             )
           : null;
         const trace = safeBfsTrace(graph);
-        const update = (patch: Partial<SimulationState>, reset = false) =>
-          setConfigurations((previous) => {
-            const next = { ...(previous[signature] ?? defaults), ...patch };
-            if (reset) {
-              next.step = 0;
-              const changed = activity
-                ? safeBfsTrace(
-                    experimentGraph(
-                      activity,
-                      next.start,
-                      next.directed,
-                      next.variant,
-                    ),
-                  )
-                : null;
-              next.target = changed
-                ? defaultRouteTarget(changed)
-                : defaults.target;
-            }
-            return { ...previous, [signature]: next };
-          });
+        const update = (patch: Partial<SimulationState>) => {
+          if (!activity) return;
+          if (props.simulations !== undefined || props.onSimulationChange) {
+            props.onSimulationChange?.(
+              stateKey,
+              changeSimulationState(
+                activity,
+                props.simulations?.[stateKey],
+                patch,
+              ),
+            );
+          } else
+            setConfigurations((previous) => ({
+              ...previous,
+              [stateKey]: changeSimulationState(
+                activity,
+                previous[stateKey],
+                patch,
+              ),
+            }));
+        };
         return {
           id: scene.id,
           type: "teaching",
@@ -148,18 +172,28 @@ function CanvasBoard(props: LearningCanvasProps) {
             onOpen: () => props.onOpenConcept(scene.concept.id),
             graph,
             variant: configuration.variant,
-            onStart: (start) => update({ start }, true),
-            onDirected: (directed) => update({ directed }, true),
-            onVariant: (variant) => update({ variant }, true),
-            openingQuestion: teaching.openingQuestion,
+            onStart: (start) => update({ start }),
+            onDirected: (directed) => update({ directed }),
+            onVariant: (variant) => update({ variant }),
+            openingQuestion: props.pageScene
+              ? props.pageScene === "scenario"
+                ? (props.lesson.learningDesign?.centralQuestion ??
+                  teaching.openingQuestion)
+                : ""
+              : teaching.openingQuestion,
             mobile,
           },
         };
       }),
     [
       scenes,
-      initial,
+      scenario,
       configurations,
+      props.simulations,
+      props.onSimulationChange,
+      props.pageScene,
+      props.activityConceptId,
+      props.lesson.learningDesign?.centralQuestion,
       mobile,
       props.onOpenConcept,
       teaching.openingQuestion,
@@ -177,6 +211,10 @@ function CanvasBoard(props: LearningCanvasProps) {
     });
   }, [active, viewportInitialized, scenes, setViewport, width, height, mobile]);
   const activeData = nodes[active]?.data;
+  if (props.pageScene === "none")
+    return (
+      <div className={styles.canvas} aria-label="This page has no simulation" />
+    );
   return (
     <div className={styles.canvas} aria-label="Interactive teaching canvas">
       <ReactFlow<TeachingNode>
@@ -190,7 +228,8 @@ function CanvasBoard(props: LearningCanvasProps) {
         selectionOnDrag={false}
         onNodeClick={(_, node) => {
           props.onSelectConcept(node.data.scene.concept.id);
-          props.onSceneChange(node.data.scene.index);
+          if (props.pageScene === undefined)
+            props.onSceneChange(node.data.scene.index);
         }}
       >
         <Background
@@ -269,7 +308,7 @@ function TeachingScene({ data }: NodeProps<TeachingNode>) {
             {isBfs ? "A WORKING EXAMPLE" : "FOLLOW THE IDEA"}
           </span>
           <h2>
-            {scene.index === 0 && isBfs
+            {scene.index === 0 && isBfs && data.openingQuestion
               ? data.openingQuestion
               : scene.concept.title}
           </h2>
