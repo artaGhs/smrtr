@@ -180,7 +180,7 @@ test("hierarchy is acyclic while contextual support links and concept relations 
   const design = lesson.learningDesign!;
   const support = (id: string, parentId: string, target: string) => ({ ...structuredClone(design.pages[0]), id, parentId, kind: "support" as const, recommendedNextPageId: null, blocks: [{ id: `${id}-context`, kind: "paragraph" as const, segments: [{ kind: "page-link" as const, text: "Follow a supporting explanation", pageId: target, reason: "Clarify the exact mechanism before returning to the original context." }] }] });
   design.pages.push(support("queue-support", "start", "fifo-support"), support("fifo-support", "queue-support", "start"));
-  lesson.relations.push({ id: "related-back", source: "application", target: "foundation", type: "related" });
+  lesson.relations.push({ id: "related-back", source: "application", target: "foundation", type: "related", meaning: "Applying the pattern reveals which part of its underlying mechanism needs clarification." });
   assert.doesNotThrow(() => validateLesson(lesson, lesson.sources[0].text));
   const bad = structuredClone(lesson); bad.learningDesign!.pages.find((page) => page.id === "queue-support")!.parentId = "fifo-support";
   assert.throws(() => validateLesson(bad, lesson.sources[0].text));
@@ -316,7 +316,7 @@ test("semantic validation rejects invented sources, bad options, prerequisite cy
   const mutations = [
     (copy: typeof lesson) => { copy.sources[0].text = "invented"; },
     (copy: typeof lesson) => { copy.modules[0].questions[0].correctOptionIds = ["missing"]; },
-    (copy: typeof lesson) => { copy.relations.push({ id: "cycle", source: "application", target: "foundation", type: "prerequisite" }); },
+    (copy: typeof lesson) => { copy.relations.push({ id: "cycle", source: "application", target: "foundation", type: "prerequisite", meaning: "This deliberately reversed dependency creates an invalid prerequisite cycle." }); },
     (copy: typeof lesson) => { copy.modules[0].explanation = "Read https://invented.example"; },
     (copy: typeof lesson) => { copy.modules[0].sourceIds = ["made-up"]; },
   ];
@@ -324,4 +324,18 @@ test("semantic validation rejects invented sources, bad options, prerequisite cy
     const copy = structuredClone(lesson); mutate(copy);
     assert.throws(() => validateLesson(copy, lesson.sources[0].text));
   }
+});
+
+test("designed lessons require explanatory relation meaning while legacy lessons retain optional meaning", async () => {
+  const { lesson } = await generateLesson({ requestId: "relation-meaning", text: "Biology investigates living organisms." }, { provider: providerFor("Biology") });
+  for (const meaning of [undefined, "   ", "related connection", "These concepts are related.", "x".repeat(501), " ".repeat(500) + "The mechanism explains the observed pattern."]) {
+    const invalid = structuredClone(lesson);
+    invalid.relations[0].meaning = meaning;
+    assert.throws(() => validateLesson(invalid, lesson.sources[0].text), /validation/);
+  }
+  const legacy = structuredClone(lesson);
+  delete legacy.learningDesign;
+  delete legacy.relations[0].meaning;
+  assert.doesNotThrow(() => validateLesson(legacy, legacy.sources[0].text));
+  assert.doesNotThrow(() => validateLesson(lesson, lesson.sources[0].text));
 });

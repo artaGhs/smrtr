@@ -101,6 +101,23 @@ test("v2 requires authored design while legacy v1 requests accept old lesson sha
   assert.equal(completed.lesson!.learningDesign, undefined);
 }));
 
+test("v2 chat rejects unexplained concept connections and permits correction without replacing the request", async () => temporary(async (options) => {
+  const request = await createChatRequest({ text: "Photosynthesis captures energy from sunlight." }, options);
+  const lesson = authored(request);
+  lesson.concepts.push({ ...lesson.concepts[0], id: "application", title: "Apply the mechanism" });
+  lesson.path.push("application");
+  lesson.modules.push({ ...lesson.modules[0], id: "module-application", conceptId: "application", questions: lesson.modules[0].questions.map((question) => ({ ...question, id: "question-application", conceptIds: ["application"] })) });
+  lesson.teachingPlan = testTeachingPlan(["idea", "application"]);
+  lesson.learningDesign = testLearningDesign(["idea", "application"], request.learnerProfile);
+  lesson.relations = [{ id: "idea-application", source: "idea", target: "application", type: "prerequisite" }];
+  await assert.rejects(submitChatLesson(request.id, { revision: request.revision, lesson }, options), (error: unknown) => error instanceof GenerationError && error.code === "INVALID_CHAT_LESSON" && /explanatory meaning/.test(error.message));
+  assert.equal((await getChatRequest(request.id, options)).state, "pending");
+  lesson.relations[0].meaning = "Following light capture explains why growth changes when the same plant receives less sunlight.";
+  const completed = await submitChatLesson(request.id, { revision: request.revision, lesson }, options);
+  assert.equal(completed.state, "completed");
+  assert.equal(completed.lesson!.relations[0].meaning, lesson.relations[0].meaning);
+}));
+
 test("canceled, stale, expired and completed requests reject late completion", async () => temporary(async (options) => {
   const request = await createChatRequest({ text: "Photosynthesis captures energy from sunlight." }, options);
   await assert.rejects(submitChatLesson(request.id, { revision: "old-revision", lesson: authored(request) }, options), code("CHAT_REQUEST_STALE"));

@@ -43,6 +43,11 @@ export function validateLesson(candidate: unknown, originalText: string, partial
   const links = new Map(lesson.concepts.map((concept) => [concept.id, new Set<string>()]));
   lesson.relations.forEach((relation) => {
     check(concepts.has(relation.source) && concepts.has(relation.target) && relation.source !== relation.target, "relation endpoints must be distinct existing concepts");
+    if (lesson.learningDesign) {
+      const meaning = relation.meaning?.trim() ?? "";
+      const genericLabel = /^(?:(?:prerequisite|related|contrast|example)(?:\s+(?:relation|relationship|connection))?|(?:these\s+)?concepts\s+are\s+(?:related|connected|linked)|related\s+to|depends\s+on|example\s+of|contrast\s+with)[.!]?$/i;
+      check(meaning.length >= 12 && (relation.meaning?.length ?? 0) <= 500 && /\p{L}/u.test(meaning) && !genericLabel.test(meaning), "designed lesson relations need explanatory meaning (12–500 characters), not just a relationship label");
+    }
     if (relation.type === "prerequisite") check((position.get(relation.source) ?? Infinity) < (position.get(relation.target) ?? -1), "prerequisites must precede their dependents in path");
     links.get(relation.source)?.add(relation.target);
     links.get(relation.target)?.add(relation.source);
