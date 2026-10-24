@@ -19,8 +19,17 @@ export function LearningDetail({ session, concept, view, onSelectConcept, onShow
   const module = lesson.modules.find((item) => item.conceptId === concept.id);
   const attempts = session.attempts.filter((attempt) => attempt.lessonId === lesson.id && attempt.revision === lesson.revision);
   const latest = new Map(attempts.map((attempt) => [attempt.questionId, attempt]));
-  const path = getTeachingSequence(lesson).map((step) => step.conceptId);
+  const sequence = getTeachingSequence(lesson);
+  const path = sequence.map((step) => step.conceptId);
   const pathIndex = path.indexOf(concept.id);
+  const approach = sequence.find((step) => step.conceptId === concept.id)?.approach;
+  const approachLabels = { example: "Example", visual: "Visual explanation", explanation: "Explanation", practice: "Practice" };
+  const tags = [
+    ...(approach ? [approachLabels[approach]] : []),
+    ...(module?.activity.kind === "bfs"
+      ? ["BFS simulation", module.activity.directed ? "Directed" : "Undirected", "Unweighted"]
+      : module?.activity.kind === "concept" ? ["Guided explanation"] : []),
+  ];
   const related = lesson.relations.filter((relation) => relation.source === concept.id || relation.target === concept.id);
   const resources = getVerifiedResources(lesson, concept.id);
   function questionView(question: Question) {
@@ -35,7 +44,7 @@ export function LearningDetail({ session, concept, view, onSelectConcept, onShow
     return target ? <button key={id} onClick={() => onSelectConcept(id)}>{target.title}<ArrowUpRight size={11} /></button> : null;
   })}</div></div>{questionView(question)}</section>)}{!lesson.finalQuestions.length && <p>This lesson has no final questions yet. Explore the checks within each concept.</p>}<p className="practice-note">Practice is a snapshot, not a mastery score. Revisit any idea that feels unclear.</p></div>;
   return <>
-    <div className="lesson-content" key={concept.id}><div className="detail-kicker"><span className="eyebrow">CONCEPT {String(Math.max(pathIndex, 0) + 1).padStart(2, "0")}</span>{[...latest.values()].some((attempt) => !attempt.correct && attempt.conceptIds.includes(concept.id)) && <span className="review-badge">Suggested review</span>}</div><h2>{concept.title}</h2><p className="concept-summary">{concept.summary}</p><div className="learning-objective"><span className="eyebrow">WHAT YOU’LL UNDERSTAND</span><p>{concept.objective}</p></div><p className="explanation">{module?.explanation ?? concept.summary}</p>{module && <><div className="example"><span className="eyebrow">WORKED EXAMPLE</span><p>{module.example}</p><small>Lesson illustration · original passages in Sources</small></div><ActivityView key={`${lesson.id}:${lesson.revision}:${module.id}`} activity={module.activity} conceptId={concept.id} />{module.questions.map(questionView)}</>}<div className="concept-connections"><span className="eyebrow">CONNECTIONS</span>{related.map((relation) => {
+    <div className="lesson-content" key={concept.id}><div className="detail-kicker"><span className="eyebrow">CONCEPT {String(Math.max(pathIndex, 0) + 1).padStart(2, "0")}</span>{[...latest.values()].some((attempt) => !attempt.correct && attempt.conceptIds.includes(concept.id)) && <span className="review-badge">Suggested review</span>}</div><h2>{concept.title}</h2>{tags.length > 0 && <ul className="concept-tags" aria-label="Concept tags">{tags.map((tag) => <li key={tag}>{tag}</li>)}</ul>}<p className="concept-summary">{concept.summary}</p><div className="learning-objective"><span className="eyebrow">WHAT YOU’LL UNDERSTAND</span><p>{concept.objective}</p></div><p className="explanation">{module?.explanation ?? concept.summary}</p>{module && <><div className="example"><span className="eyebrow">WORKED EXAMPLE</span><p>{module.example}</p><small>Lesson illustration · original passages in Sources</small></div><ActivityView key={`${lesson.id}:${lesson.revision}:${module.id}`} activity={module.activity} conceptId={concept.id} />{module.questions.map(questionView)}</>}<div className="concept-connections"><span className="eyebrow">CONNECTIONS</span>{related.map((relation) => {
       const other = lesson.concepts.find((item) => item.id === (relation.source === concept.id ? relation.target : relation.source));
       const label = relation.type === "prerequisite" ? relation.target === concept.id ? "Builds on" : "Prepares you for" : relation.type === "contrast" ? "Compare with" : relation.type === "example" ? relation.target === concept.id ? "Example of" : "See an example" : "Related idea";
       return other ? <button key={relation.id} onClick={() => onSelectConcept(other.id)}><span>{label}</span><strong>{other.title}</strong><ArrowUpRight size={13} /></button> : null;
