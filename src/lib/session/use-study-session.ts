@@ -10,6 +10,7 @@ import {
   type Question,
   type StudyWorkspaceProps,
 } from "../contracts";
+import { getTeachingSequence } from "../teaching/sequence";
 import { sampleLesson, SAMPLE_INPUT } from "../fixtures/sample-lesson";
 import { generateLesson } from "./generate-lesson";
 import { RequestGate } from "./request-gate";
@@ -25,8 +26,10 @@ import {
 
 export function useStudySession(): StudyWorkspaceProps {
   const [lesson, setLesson] = useState(sampleLesson);
-  const [selectedConceptId, onSelectConcept] = useState(sampleLesson.path[0]);
-  const [input, setInput] = useState(SAMPLE_INPUT);
+  const [selectedConceptId, onSelectConcept] = useState(
+    getTeachingSequence(sampleLesson)[0].conceptId,
+  );
+  const [input, setInput] = useState("");
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
@@ -50,6 +53,9 @@ export function useStudySession(): StudyWorkspaceProps {
     if (pendingChat.current)
       void cancelChatRequest(pendingChat.current).catch(() => undefined);
     pendingChat.current = null;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("request");
+    window.history.replaceState(null, "", url);
     setChatRequest(null);
     restoreCompleted();
     setStatus("idle");
@@ -57,7 +63,8 @@ export function useStudySession(): StudyWorkspaceProps {
   const applyCompleted = (result: Lesson) => {
     lastCompleteLesson.current = result;
     setLesson(result);
-    onSelectConcept(result.path[0] ?? result.concepts[0].id);
+    onSelectConcept(getTeachingSequence(result)[0].conceptId);
+    setInput(result.sources[0]?.text ?? input);
     setStatus("ready");
   };
   async function executeChat(existingId?: string) {
@@ -76,6 +83,9 @@ export function useStudySession(): StudyWorkspaceProps {
       }
       pendingChat.current = request.status === "waiting" ? request.id : null;
       setChatRequest(request);
+      const url = new URL(window.location.href);
+      url.searchParams.set("request", request.id);
+      window.history.replaceState(null, "", url);
       const result = await waitForChatLesson(request, signal, (update) => {
         if (gate.current.isCurrent(id)) setChatRequest(update);
       });
@@ -99,6 +109,9 @@ export function useStudySession(): StudyWorkspaceProps {
     try {
       saved = readSession(localStorage);
     } catch {}
+    const linkedRequestId = new URLSearchParams(window.location.search).get(
+      "request",
+    );
     if (saved) {
       lastCompleteLesson.current = saved.lesson;
       setLesson(saved.lesson);
@@ -110,7 +123,12 @@ export function useStudySession(): StudyWorkspaceProps {
           ? saved.selectedConceptId
           : saved.lesson.concepts[0].id,
       );
-      if (saved.chatRequestId) void executeChat(saved.chatRequestId);
+      if (!linkedRequestId && saved.chatRequestId)
+        void executeChat(saved.chatRequestId);
+    }
+    if (linkedRequestId) {
+      setGenerationMode("chat");
+      void executeChat(linkedRequestId);
     }
     setRestored(true);
     return () => gate.current.cancel();
@@ -162,7 +180,7 @@ export function useStudySession(): StudyWorkspaceProps {
           if (!gate.current.isCurrent(requestId)) return;
           setLesson(partial);
           if (!planShown) {
-            onSelectConcept(partial.path[0] ?? partial.concepts[0].id);
+            onSelectConcept(getTeachingSequence(partial)[0].conceptId);
             planShown = true;
           }
         },
@@ -170,7 +188,7 @@ export function useStudySession(): StudyWorkspaceProps {
       if (!gate.current.isCurrent(requestId)) return;
       lastCompleteLesson.current = { ...result, origin: "provider" };
       setLesson(lastCompleteLesson.current);
-      if (!planShown) onSelectConcept(result.path[0] ?? result.concepts[0].id);
+      if (!planShown) onSelectConcept(getTeachingSequence(result)[0].conceptId);
       setStatus("ready");
       gate.current.finish(requestId);
     } catch (cause) {
@@ -237,7 +255,7 @@ export function useStudySession(): StudyWorkspaceProps {
       onCancel();
       lastCompleteLesson.current = sampleLesson;
       setLesson(sampleLesson);
-      onSelectConcept(sampleLesson.path[0]);
+      onSelectConcept(getTeachingSequence(sampleLesson)[0].conceptId);
       setInput(SAMPLE_INPUT);
       setError(null);
     },
