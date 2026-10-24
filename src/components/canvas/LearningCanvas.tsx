@@ -55,6 +55,7 @@ type SceneData = Record<string, unknown> & {
   onVariant: (value: string) => void;
   openingQuestion: string;
   mobile: boolean;
+  pageMode: boolean;
 };
 type TeachingNode = Node<SceneData, "teaching">;
 const nodeTypes = { teaching: TeachingScene };
@@ -158,7 +159,7 @@ function CanvasBoard(props: LearningCanvasProps) {
           type: "teaching",
           position: { x: scene.index * 1540, y: scene.index % 2 ? 70 : 0 },
           width: mobile ? 620 : 1320,
-          height: mobile ? 1350 : 940,
+          height: mobile ? 1350 : props.pageScene !== undefined ? 850 : 940,
           draggable: false,
           selectable: false,
           focusable: false,
@@ -182,6 +183,7 @@ function CanvasBoard(props: LearningCanvasProps) {
                 : ""
               : teaching.openingQuestion,
             mobile,
+            pageMode: props.pageScene !== undefined,
           },
         };
       }),
@@ -206,17 +208,35 @@ function CanvasBoard(props: LearningCanvasProps) {
   );
   useEffect(() => {
     if (!viewportInitialized || !scenes[active] || !width || !height) return;
-    void setViewport(teachingViewport(active, width, height, mobile), {
-      duration: 0,
-    });
-  }, [active, viewportInitialized, scenes, setViewport, width, height, mobile]);
+    void setViewport(
+      teachingViewport(active, width, height, mobile, props.pageScene),
+      {
+        duration: 0,
+      },
+    );
+  }, [
+    active,
+    viewportInitialized,
+    scenes,
+    setViewport,
+    width,
+    height,
+    mobile,
+    props.pageScene,
+  ]);
   const activeData = nodes[active]?.data;
   if (props.pageScene === "none")
     return (
-      <div className={styles.canvas} aria-label="This page has no simulation" />
+      <div
+        className={`${styles.canvas} ${styles.pageCanvas}`}
+        aria-label="This page has no simulation"
+      />
     );
   return (
-    <div className={styles.canvas} aria-label="Interactive teaching canvas">
+    <div
+      className={`${styles.canvas} ${props.pageScene !== undefined ? styles.pageCanvas : ""}`}
+      aria-label="Interactive teaching canvas"
+    >
       <ReactFlow<TeachingNode>
         nodes={nodes}
         nodeTypes={nodeTypes}
@@ -242,9 +262,12 @@ function CanvasBoard(props: LearningCanvasProps) {
           position="bottom-left"
           showInteractive={false}
           onFitView={() => {
-            void setViewport(teachingViewport(active, width, height, mobile), {
-              duration: 0,
-            });
+            void setViewport(
+              teachingViewport(active, width, height, mobile, props.pageScene),
+              {
+                duration: 0,
+              },
+            );
           }}
         />
       </ReactFlow>
@@ -259,7 +282,11 @@ function CanvasBoard(props: LearningCanvasProps) {
           aria-label="Mobile simulation controls"
         >
           <span className={styles.mobilePanHint}>
-            Pan down to predict · Pinch to zoom
+            {props.pageScene !== undefined
+              ? props.pageScene === "queue"
+                ? "Pan to inspect the network · Pinch to zoom"
+                : "Pan to inspect the queue · Pinch to zoom"
+              : "Pan down to predict · Pinch to zoom"}
           </span>
           <button
             type="button"
@@ -298,7 +325,7 @@ function TeachingScene({ data }: NodeProps<TeachingNode>) {
   const isBfs = scene.family !== "concept" && trace && graph;
   return (
     <section
-      className={`${styles.scene} ${scene.family === "queue" ? styles.queueScene : ""} ${data.mobile ? styles.mobileScene : ""}`}
+      className={`${styles.scene} ${scene.family === "queue" ? styles.queueScene : ""} ${data.mobile ? styles.mobileScene : ""} ${data.pageMode ? styles.pageScene : ""}`}
       aria-label={`Teaching scene: ${scene.concept.title}`}
     >
       <header className={styles.sceneHeader}>
