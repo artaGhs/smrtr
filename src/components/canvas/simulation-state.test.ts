@@ -6,6 +6,7 @@ import {
   pageCanvasScenes,
   lessonBfsActivity,
   teachingViewport,
+  teachingDisclosure,
 } from "./scene-model";
 import {
   changeSimulationState,
@@ -133,4 +134,25 @@ test("hierarchy framing uses the bounded canvas pane rather than global viewport
   const queue = teachingViewport(0, 360, 280, true, "queue");
   assert.ok(queue.y + 440 * queue.zoom >= 0);
   assert.ok(queue.y + (440 + 155) * queue.zoom < 208);
+});
+
+test("novice problem and intuition views reveal terminology only when the page calls for mechanism", () => {
+  assert.equal(teachingDisclosure("scenario", "overview"), "problem");
+  assert.equal(teachingDisclosure("layers", "core"), "intuition");
+  for (const scene of ["queue", "discovery", "route"] as const)
+    assert.equal(teachingDisclosure(scene, "support"), "mechanism");
+  assert.equal(teachingDisclosure("layers", "transfer"), "mechanism");
+  assert.equal(teachingDisclosure(undefined, undefined), "mechanism");
+  const state = { ...defaultSimulationState(graph), step: 2, target: "C" };
+  const entry = structuredClone(state);
+  teachingDisclosure("scenario", "overview");
+  teachingDisclosure("layers", "core");
+  assert.deepEqual(
+    state,
+    entry,
+    "disclosure does not reset or mutate the shared simulation",
+  );
+  const frame = teachingViewport(0, 358, 313, true, "scenario", "overview");
+  assert.ok(frame.y + 90 * frame.zoom >= 0);
+  assert.ok(frame.y + (90 + 395) * frame.zoom <= 313);
 });

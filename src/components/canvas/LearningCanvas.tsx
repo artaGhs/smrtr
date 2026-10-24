@@ -30,6 +30,8 @@ import {
   knownDistance,
   safeBfsTrace,
   teachingViewport,
+  teachingDisclosure,
+  type TeachingDisclosure,
   type CanvasScene,
 } from "./scene-model";
 import {
@@ -56,6 +58,7 @@ type SceneData = Record<string, unknown> & {
   openingQuestion: string;
   mobile: boolean;
   pageMode: boolean;
+  disclosure: TeachingDisclosure;
 };
 type TeachingNode = Node<SceneData, "teaching">;
 const nodeTypes = { teaching: TeachingScene };
@@ -184,6 +187,7 @@ function CanvasBoard(props: LearningCanvasProps) {
               : teaching.openingQuestion,
             mobile,
             pageMode: props.pageScene !== undefined,
+            disclosure: teachingDisclosure(props.pageScene, props.pageKind),
           },
         };
       }),
@@ -194,6 +198,7 @@ function CanvasBoard(props: LearningCanvasProps) {
       props.simulations,
       props.onSimulationChange,
       props.pageScene,
+      props.pageKind,
       props.activityConceptId,
       props.lesson.learningDesign?.centralQuestion,
       mobile,
@@ -209,7 +214,14 @@ function CanvasBoard(props: LearningCanvasProps) {
   useEffect(() => {
     if (!viewportInitialized || !scenes[active] || !width || !height) return;
     void setViewport(
-      teachingViewport(active, width, height, mobile, props.pageScene),
+      teachingViewport(
+        active,
+        width,
+        height,
+        mobile,
+        props.pageScene,
+        props.pageKind,
+      ),
       {
         duration: 0,
       },
@@ -223,6 +235,7 @@ function CanvasBoard(props: LearningCanvasProps) {
     height,
     mobile,
     props.pageScene,
+    props.pageKind,
   ]);
   const activeData = nodes[active]?.data;
   if (props.pageScene === "none")
@@ -263,7 +276,14 @@ function CanvasBoard(props: LearningCanvasProps) {
           showInteractive={false}
           onFitView={() => {
             void setViewport(
-              teachingViewport(active, width, height, mobile, props.pageScene),
+              teachingViewport(
+                active,
+                width,
+                height,
+                mobile,
+                props.pageScene,
+                props.pageKind,
+              ),
               {
                 duration: 0,
               },
@@ -275,47 +295,53 @@ function CanvasBoard(props: LearningCanvasProps) {
         Drag to explore <span>·</span> Scroll to pan <span>·</span> Pinch to
         zoom
       </div>
-      {mobile && activeData?.trace && activeData.scene.family !== "concept" && (
-        <div
-          className={styles.mobilePlayback}
-          role="group"
-          aria-label="Mobile simulation controls"
-        >
-          <span className={styles.mobilePanHint}>
-            {props.pageScene !== undefined
-              ? props.pageScene === "queue"
-                ? "Pan to inspect the network · Pinch to zoom"
-                : "Pan to inspect the queue · Pinch to zoom"
-              : "Pan down to predict · Pinch to zoom"}
-          </span>
-          <button
-            type="button"
-            aria-label="Replay canvas BFS"
-            disabled={activeData.step === 0}
-            onClick={() => activeData.onStep(0)}
+      {mobile &&
+        activeData?.trace &&
+        activeData.scene.family !== "concept" &&
+        activeData.disclosure !== "problem" && (
+          <div
+            className={styles.mobilePlayback}
+            role="group"
+            aria-label="Mobile simulation controls"
           >
-            ↺
-          </button>
-          <div aria-live="polite">
-            <span>
-              EXPANSION {activeData.step} / {activeData.trace.frames.length - 1}
+            <span className={styles.mobilePanHint}>
+              {activeData.disclosure === "intuition"
+                ? "Pan to explore · Pinch to zoom"
+                : props.pageScene !== undefined
+                  ? props.pageScene === "queue"
+                    ? "Pan to inspect the network · Pinch to zoom"
+                    : "Pan to inspect the queue · Pinch to zoom"
+                  : "Pan down to predict · Pinch to zoom"}
             </span>
-            <strong>
-              Queue:{" "}
-              {activeData.trace.frames[activeData.step].queue.join(", ") ||
-                "empty"}
-            </strong>
+            <button
+              type="button"
+              aria-label="Replay canvas BFS"
+              disabled={activeData.step === 0}
+              onClick={() => activeData.onStep(0)}
+            >
+              ↺
+            </button>
+            <div aria-live="polite">
+              <span>
+                {activeData.disclosure === "intuition" ? "STEP" : "EXPANSION"}{" "}
+                {activeData.step} / {activeData.trace.frames.length - 1}
+              </span>
+              <strong>
+                {activeData.disclosure === "intuition"
+                  ? `Next place: ${activeData.trace.frames[activeData.step].queue[0] ?? "all explored"}`
+                  : `Queue: ${activeData.trace.frames[activeData.step].queue.join(", ") || "empty"}`}
+              </strong>
+            </div>
+            <button
+              type="button"
+              disabled={activeData.trace.frames[activeData.step].complete}
+              onClick={() => activeData.onStep(activeData.step + 1)}
+              aria-label="Next canvas BFS step"
+            >
+              Next →
+            </button>
           </div>
-          <button
-            type="button"
-            disabled={activeData.trace.frames[activeData.step].complete}
-            onClick={() => activeData.onStep(activeData.step + 1)}
-            aria-label="Next canvas BFS step"
-          >
-            Next →
-          </button>
-        </div>
-      )}
+        )}
     </div>
   );
 }
@@ -325,33 +351,39 @@ function TeachingScene({ data }: NodeProps<TeachingNode>) {
   const isBfs = scene.family !== "concept" && trace && graph;
   return (
     <section
-      className={`${styles.scene} ${scene.family === "queue" ? styles.queueScene : ""} ${data.mobile ? styles.mobileScene : ""} ${data.pageMode ? styles.pageScene : ""}`}
-      aria-label={`Teaching scene: ${scene.concept.title}`}
+      className={`${styles.scene} ${scene.family === "queue" ? styles.queueScene : ""} ${data.mobile ? styles.mobileScene : ""} ${data.pageMode ? styles.pageScene : ""} ${data.disclosure === "problem" ? styles.problemScene : data.disclosure === "intuition" ? styles.intuitionScene : ""}`}
+      aria-label={
+        data.disclosure === "problem"
+          ? "Delivery problem"
+          : `Teaching scene: ${scene.concept.title}`
+      }
     >
-      <header className={styles.sceneHeader}>
-        <div>
-          <span className={styles.sceneNumber}>
-            {String(scene.index + 1).padStart(2, "0")} <i />{" "}
-            {isBfs ? "A WORKING EXAMPLE" : "FOLLOW THE IDEA"}
-          </span>
-          <h2>
-            {scene.index === 0 && isBfs && data.openingQuestion
-              ? data.openingQuestion
-              : scene.concept.title}
-          </h2>
-          <p>{scene.concept.summary}</p>
-        </div>
-        <button
-          type="button"
-          className={`nodrag nopan ${styles.openButton}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            data.onOpen();
-          }}
-        >
-          Explore concept <span>↗</span>
-        </button>
-      </header>
+      {!data.pageMode && (
+        <header className={styles.sceneHeader}>
+          <div>
+            <span className={styles.sceneNumber}>
+              {String(scene.index + 1).padStart(2, "0")} <i />{" "}
+              {isBfs ? "A WORKING EXAMPLE" : "FOLLOW THE IDEA"}
+            </span>
+            <h2>
+              {scene.index === 0 && isBfs && data.openingQuestion
+                ? data.openingQuestion
+                : scene.concept.title}
+            </h2>
+            <p>{scene.concept.summary}</p>
+          </div>
+          <button
+            type="button"
+            className={`nodrag nopan ${styles.openButton}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              data.onOpen();
+            }}
+          >
+            Explore concept <span>↗</span>
+          </button>
+        </header>
+      )}
       {isBfs ? (
         <BfsScene data={data} trace={trace} />
       ) : (
@@ -365,6 +397,29 @@ function BfsScene({ data, trace }: { data: SceneData; trace: BfsTrace }) {
   const frame = trace.frames[step];
   const predictionKey = `${JSON.stringify(graph)}:${step}`;
   // Keys reset prediction state for a new graph or frame without a stale answer flashing.
+  if (data.disclosure === "problem")
+    return (
+      <div className={styles.bfsBody}>
+        <div className={`${styles.mapArea} nodrag nopan`}>
+          <DeliveryMap
+            trace={trace}
+            frame={frame}
+            focus="network"
+            target={target}
+            disclosure="problem"
+            onInspect={data.onTarget}
+          />
+        </div>
+        <p className={styles.problemAssumptions}>
+          Every road counts as one hop.{" "}
+          {trace.graph.directed
+            ? "Follow the arrow direction"
+            : "Roads work in both directions"}{" "}
+          from {trace.graph.start} to {target}.
+        </p>
+      </div>
+    );
+  const intuition = data.disclosure === "intuition";
   return (
     <div className={styles.bfsBody}>
       <div className={`nodrag nopan ${styles.experimentControls}`}>
@@ -413,6 +468,7 @@ function BfsScene({ data, trace }: { data: SceneData; trace: BfsTrace }) {
           focus={scene.family}
           target={target}
           onInspect={data.onTarget}
+          disclosure={data.disclosure}
         />
       </div>
       <aside className={styles.marginNotes}>
@@ -452,8 +508,9 @@ function BfsScene({ data, trace }: { data: SceneData; trace: BfsTrace }) {
               before far.
             </h3>
             <p>
-              Each shaded column is one more edge from the start. BFS reaches
-              the fewest-edge layer first.
+              {intuition
+                ? "Each shaded column is one more road hop from the start. Explore nearby places before moving farther away."
+                : "Each shaded column is one more edge from the start. BFS reaches the fewest-edge layer first."}
             </p>
           </>
         ) : (
@@ -486,18 +543,25 @@ function BfsScene({ data, trace }: { data: SceneData; trace: BfsTrace }) {
             {pathTo(frame, target)?.join(" → ") ??
               (frame.complete
                 ? "No route from this start."
-                : "Not discovered yet.")}
+                : intuition
+                  ? "Not reached yet."
+                  : "Not discovered yet.")}
           </p>
           {knownDistance(frame, target) !== undefined && (
             <small>
-              {knownDistance(frame, target)} edges · unweighted graph
+              {knownDistance(frame, target)}{" "}
+              {intuition
+                ? "road hops from the start"
+                : "edges · unweighted graph"}
             </small>
           )}
         </div>
       </aside>
-      <div className={styles.beltArea}>
-        <Conveyor frame={frame} />
-      </div>
+      {!intuition && (
+        <div className={styles.beltArea}>
+          <Conveyor frame={frame} />
+        </div>
+      )}
       <div className={`nodrag nopan ${styles.playback}`}>
         <button
           type="button"
@@ -519,12 +583,16 @@ function BfsScene({ data, trace }: { data: SceneData; trace: BfsTrace }) {
           <span>
             {frame.complete
               ? "ALL REACHABLE STOPS EXPLORED"
-              : `EXPANSION ${step} / ${trace.frames.length - 1}`}
+              : `${intuition ? "EXPLORATION" : "EXPANSION"} ${step} / ${trace.frames.length - 1}`}
           </span>
           <strong>
             {frame.current
-              ? `${frame.current} expanded${frame.newlyDiscovered.length ? ` · ${frame.newlyDiscovered.join(", ")} joined the queue` : " · no new discoveries"}`
-              : `${trace.graph.start} is queued. Where do we go next?`}
+              ? intuition
+                ? `${frame.current} explored${frame.newlyDiscovered.length ? ` · reached ${frame.newlyDiscovered.join(", ")}` : " · no new places"}`
+                : `${frame.current} expanded${frame.newlyDiscovered.length ? ` · ${frame.newlyDiscovered.join(", ")} joined the queue` : " · no new discoveries"}`
+              : intuition
+                ? `${trace.graph.start} is our starting place. Where do we go next?`
+                : `${trace.graph.start} is queued. Where do we go next?`}
           </strong>
         </div>
         <button
@@ -538,10 +606,13 @@ function BfsScene({ data, trace }: { data: SceneData; trace: BfsTrace }) {
         </button>
       </div>
       <div className={styles.sceneFootnote}>
-        VISUAL ANALOGY · Computed from this lesson’s graph · Alphabetical
-        neighbors · Visited on enqueue
+        {intuition
+          ? "Every road counts as one hop · Explore outward from the start"
+          : "VISUAL ANALOGY · Computed from this lesson’s graph · Alphabetical neighbors · Visited on enqueue"}
       </div>
-      <Prediction key={predictionKey} trace={trace} step={step} />
+      {!intuition && (
+        <Prediction key={predictionKey} trace={trace} step={step} />
+      )}
     </div>
   );
 }
