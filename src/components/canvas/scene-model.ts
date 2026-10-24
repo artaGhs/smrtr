@@ -3,6 +3,7 @@ import type {
   Concept,
   Lesson,
   LessonModule,
+  PageScene,
 } from "../../lib/contracts";
 import { getTeachingSequence } from "../../lib/teaching/sequence";
 import {
@@ -182,4 +183,38 @@ export function teachingViewport(
       (index % 2 ? 70 : 0) * zoom,
     zoom,
   };
+}
+
+/** An explicit page scene is a view of the selected page, not another lesson sequence. */
+export function pageCanvasScenes(
+  lesson: Lesson,
+  pageScene: PageScene | undefined,
+  selectedConceptId: string,
+  activeSceneIndex: number,
+): CanvasScene[] {
+  const scenes = buildCanvasScenes(lesson);
+  if (pageScene === undefined) return scenes;
+  if (pageScene === "none") return [];
+  const concept =
+    lesson.concepts.find((item) => item.id === selectedConceptId) ??
+    scenes[activeSceneIndex]?.concept ??
+    lesson.concepts[0];
+  if (!concept) return [];
+  const family: CanvasScene["family"] =
+    pageScene === "scenario"
+      ? "network"
+      : pageScene === "route"
+        ? "layers"
+        : pageScene === "explanation"
+          ? "concept"
+          : pageScene;
+  return [
+    {
+      id: `page-scene-${concept.id}-${pageScene}`,
+      concept,
+      module: lesson.modules.find((module) => module.conceptId === concept.id),
+      family,
+      index: 0,
+    },
+  ];
 }
