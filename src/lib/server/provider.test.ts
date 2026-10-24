@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createOpenAIProvider, type ProviderRequest } from "./provider";
 import { GenerationError, publicError } from "./errors";
-import { ContentSchema, providerJsonSchema } from "./schemas";
+import { ContentSchema, PlanSchema, providerJsonSchema } from "./schemas";
 
 const request: ProviderRequest = { schemaName: "study_plan", jsonSchema: { type: "object" }, instructions: "Return JSON", input: "Study biology", signal: new AbortController().signal, maxOutputTokens: 1000 };
 
@@ -67,4 +67,11 @@ test("provider schema uses supported nested anyOf and enum for activity variants
     Object.values(object).forEach(checkObjects);
   };
   checkObjects(schema);
+});
+
+test("new provider plans require an explicit teaching strategy", () => {
+  const schema = providerJsonSchema(PlanSchema);
+  assert.ok((schema.required as string[]).includes("teachingPlan"));
+  const teaching = (schema.properties as Record<string, Record<string, unknown>>).teachingPlan;
+  assert.deepEqual(teaching.required, ["openingQuestion", "bigPicture", "sequence"]);
 });
