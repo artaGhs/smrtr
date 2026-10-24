@@ -12,7 +12,20 @@ export function chatError(error: unknown) {
 
 export function assertSameOrigin(request: Request) {
   const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) throw new GenerationError("INVALID_ORIGIN", "Open the request from the same SMRTR app origin.", 403);
+  if (!origin) return;
+  const requestUrl = new URL(request.url);
+  // Next can normalize request.url to its bind address (0.0.0.0), while the
+  // browser uses localhost. Host preserves the authority the browser requested.
+  // Do not trust arbitrary X-Forwarded-Host values on this local server.
+  const authority = request.headers.get("host") ?? requestUrl.host;
+  let expected: URL;
+  let incoming: URL;
+  try {
+    if (!authority || /[\s/@?#,\\]/.test(authority)) throw new Error("Invalid authority");
+    expected = new URL(`${requestUrl.protocol}//${authority}`);
+    incoming = new URL(origin);
+  } catch { throw new GenerationError("INVALID_ORIGIN", "Open the request from the same SMRTR app origin.", 403); }
+  if (incoming.origin !== expected.origin || origin !== incoming.origin) throw new GenerationError("INVALID_ORIGIN", "Open the request from the same SMRTR app origin.", 403);
 }
 
 export async function readChatJson(request: Request): Promise<Record<string, unknown>> {
