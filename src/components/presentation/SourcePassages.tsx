@@ -19,7 +19,7 @@ export function SourcePassages({ lesson, concept, sourceIds, onSelectConcept }: 
   const [showAll, setShowAll] = useState(false);
   const sources = showAll ? lesson.sources : lesson.sources.filter((source) => sourceIds.includes(source.id));
   return <div className="lesson-content sources-content">
-    <span className="eyebrow">GO TO THE SOURCE</span><h2>Ideas, grounded.</h2>
+    <span className="eyebrow">ORIGINAL MATERIAL</span><h2>Source passages.</h2>
     <p>Original source passages are kept separate from the lesson’s explanations and worked examples.</p>
     <div className="source-scope"><span>{showAll ? "All lesson sources" : `Supporting ${concept.title}`}</span><button onClick={() => setShowAll(!showAll)}>{showAll ? "For this concept" : "Show all sources"}</button></div>
     {sources.length ? sources.map((source, index) => {

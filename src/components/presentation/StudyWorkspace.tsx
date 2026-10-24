@@ -1,167 +1,106 @@
 "use client";
 
-import { useRef, useState } from "react";
-import {
-  ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, Check, Compass,
-  FileText, Focus, KeyRound, Layers, LoaderCircle, MessageSquare, RotateCcw, Sparkles, X,
-} from "lucide-react";
-import type { Question, StudyWorkspaceProps } from "@/lib/contracts";
-import { ActivityView } from "../activities/ActivityView";
-import { QuestionView } from "../activities/QuestionView";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, FileText, Layers, LoaderCircle, Map as MapIcon, MessageSquare, Plus, Shapes, X } from "lucide-react";
+import type { StudyWorkspaceProps } from "@/lib/contracts";
+import { getTeachingSequence } from "@/lib/teaching/sequence";
 import { ConceptMap } from "./ConceptMap";
-import { SourcePassages } from "./SourcePassages";
-import { ChatHandoff } from "./ChatHandoff";
-
-type DetailView = "learn" | "sources" | "practice";
+import { LearningDetail, type DetailView } from "./LearningDetail";
+import { NotesComposer } from "./NotesComposer";
 
 export function StudyWorkspace(props: StudyWorkspaceProps) {
-  return <WorkspaceContent key={`${props.lesson.id}:${props.lesson.revision}`} {...props} />;
+  return <CanvasWorkspace key={`${props.lesson.id}:${props.lesson.revision}`} {...props} />;
 }
 
-function WorkspaceContent(props: StudyWorkspaceProps) {
-  const { lesson, selectedConceptId } = props;
-  const [view, setView] = useState<DetailView>("learn");
+function CanvasWorkspace(session: StudyWorkspaceProps) {
+  const { lesson } = session;
+  const [composerOpen, setComposerOpen] = useState(lesson.mode === "sample" && session.status !== "generating");
+  const [detailView, setDetailView] = useState<DetailView | null>(null);
+  const [canvasMode, setCanvasMode] = useState<"lesson" | "map">("lesson");
+  const [pathOpen, setPathOpen] = useState(false);
+  const [activeSceneIndex, setActiveSceneIndex] = useState(0);
   const [overviewVersion, setOverviewVersion] = useState(0);
-  const mapRef = useRef<HTMLElement>(null);
-  const detailRef = useRef<HTMLElement>(null);
-  const concept = lesson.concepts.find((item) => item.id === selectedConceptId) ?? lesson.concepts[0];
-  const module = lesson.modules.find((item) => item.conceptId === concept.id);
-  const path = lesson.path.filter((id) => lesson.concepts.some((item) => item.id === id));
-  const pathIndex = path.indexOf(concept.id);
-  const currentAttempts = props.attempts.filter((attempt) => attempt.lessonId === lesson.id && attempt.revision === lesson.revision);
-  const latestAttempts = new Map(currentAttempts.map((attempt) => [attempt.questionId, attempt]));
-  const practiced = new Set(currentAttempts.flatMap((attempt) => attempt.conceptIds));
-  const needsReview = new Set([...latestAttempts.values()].filter((attempt) => !attempt.correct).flatMap((attempt) => attempt.conceptIds));
-  const related = lesson.relations.filter((relation) => relation.source === concept.id || relation.target === concept.id);
-  const generating = props.status === "generating";
-  const inputLength = props.input.trim().length;
-  const chatMode = props.generationMode === "chat";
-  const waitingForChat = chatMode && props.chatRequest?.status === "waiting" && generating;
-  const lessonBadge = lesson.mode === "sample" ? "SAMPLE LESSON" : lesson.origin === "chat" ? "GENERATED WITH CONNECTED CHAT" : "FROM YOUR NOTES";
+  const drawerRef = useRef<HTMLElement>(null);
+  const drawerTrigger = useRef<HTMLElement | null>(null);
+  const concept = lesson.concepts.find((item) => item.id === session.selectedConceptId) ?? lesson.concepts[0];
+  const sequence = getTeachingSequence(lesson);
+  const currentStep = sequence[activeSceneIndex] ?? sequence[0];
+  const currentTitle = lesson.concepts.find((item) => item.id === currentStep?.conceptId)?.title ?? concept.title;
+  const attempts = session.attempts.filter((attempt) => attempt.lessonId === lesson.id && attempt.revision === lesson.revision);
+  const latest = new Map(attempts.map((attempt) => [attempt.questionId, attempt]));
+  const practiced = new Set(attempts.flatMap((attempt) => attempt.conceptIds));
+  const needsReview = new Set([...latest.values()].filter((attempt) => !attempt.correct).flatMap((attempt) => attempt.conceptIds));
+  const badge = lesson.mode === "sample" ? "Sample" : lesson.origin === "chat" ? "From your chat" : "From your notes";
+  const waiting = session.status === "generating";
 
-  function revealDetail() {
-    requestAnimationFrame(() => {
-      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      detailRef.current?.scrollIntoView({ block: "start", behavior: reducedMotion ? "instant" : "smooth" });
-      detailRef.current?.focus({ preventScroll: true });
-    });
+  useEffect(() => {
+    if (detailView) {
+      drawerRef.current?.focus({preventScroll: true});
+      drawerRef.current?.querySelector(".drawer-scroll")?.scrollTo({top: 0});
+    }
+  }, [detailView, concept.id]);
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !composerOpen) { setDetailView(null); setPathOpen(false); }
+    };
+    document.addEventListener("keydown", escape);
+    return () => document.removeEventListener("keydown", escape);
+  }, [composerOpen]);
+
+  function openDetail(view: DetailView) {
+    drawerTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setDetailView(view);
+    setPathOpen(false);
+  }
+  function closeDetail() {
+    setDetailView(null);
+    drawerTrigger.current?.focus({preventScroll: true});
+  }
+  function selectConcept(id: string, open = true) {
+    session.onSelectConcept(id);
+    const index = sequence.findIndex((step) => step.conceptId === id);
+    if (index >= 0) setActiveSceneIndex(index);
+    if (open) openDetail("learn");
+  }
+  function goToStep(index: number) {
+    const bounded = Math.max(0, Math.min(sequence.length - 1, index));
+    setActiveSceneIndex(bounded);
+    if (sequence[bounded]) session.onSelectConcept(sequence[bounded].conceptId);
+    setPathOpen(false);
+    if (detailView) setDetailView("learn");
   }
 
-  function selectConcept(id: string, focusDetail = false) {
-    props.onSelectConcept(id);
-    setView("learn");
-    if (focusDetail || window.matchMedia("(max-width: 850px)").matches) revealDetail();
-  }
+  return <main className={`canvas-workspace ${detailView ? "has-detail" : ""}`}>
+    <a className="skip-link" href="#guided-sequence">Skip to guided sequence</a>
+    <section className="canvas-stage" aria-label="Learning canvas">
+      <ConceptMap lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id)} practiced={practiced} needsReview={needsReview} overviewVersion={overviewVersion} />
+    </section>
+    <header className="canvas-header">
+      <div className="canvas-identity"><button className="canvas-wordmark" onClick={() => setComposerOpen(true)} aria-label="SMRTR — open topic or notes">smrtr<span>↗</span></button><span className="header-divider" /><div className="canvas-document"><span className="canvas-document-title">{lesson.title}</span><span className="lesson-origin">{badge}</span></div></div>
+      <nav className="canvas-actions" aria-label="Workspace tools">
+        {waiting && <button className="request-chip" onClick={() => setComposerOpen(true)}><LoaderCircle className="spin" size={13} /><span>{session.generationMode === "chat" ? "Awaiting chat" : "Generating"}</span></button>}
+        {!waiting && session.error && <button className="request-chip request-error" onClick={() => setComposerOpen(true)}><MessageSquare size={13} /><span>Request needs attention</span></button>}
+        <button className="toolbar-button" onClick={() => openDetail("sources")} aria-label="Open source passages" title="Sources"><FileText size={15} /><span>Sources</span></button><button className="toolbar-button" onClick={() => openDetail("practice")} aria-label="Open final practice" title="Practice"><Layers size={15} /><span>Practice</span></button><button className="new-lesson-button" onClick={() => setComposerOpen(true)}><Plus size={15} /><span>New lesson</span></button>
+      </nav>
+    </header>
+    <div className="canvas-view-switch" role="group" aria-label="Canvas view"><button className={canvasMode === "lesson" ? "active" : ""} aria-pressed={canvasMode === "lesson"} onClick={() => setCanvasMode("lesson")}><Shapes size={14} />Visual lesson</button><button className={canvasMode === "map" ? "active" : ""} aria-pressed={canvasMode === "map"} onClick={() => { setCanvasMode("map"); setOverviewVersion((value) => value + 1); }}><MapIcon size={14} />Connections</button></div>
+    {canvasMode === "map" && <div className="canvas-map-legend"><span><i />Prerequisite → next idea</span><span><i className="dashed" />Related</span><span>Click an idea to explore</span></div>}
+    <footer className="sequence-dock" id="guided-sequence" aria-label="Guided teaching sequence">
+      {pathOpen && <div className="sequence-popover"><div className="sequence-popover-heading"><span>YOUR LEARNING SEQUENCE</span><button className="icon-button" onClick={() => setPathOpen(false)} aria-label="Close learning sequence"><X size={14} /></button></div>{sequence.map((step, index) => <button key={`${step.conceptId}:${index}`} className={index === activeSceneIndex ? "active" : ""} onClick={() => goToStep(index)}><span>{practiced.has(step.conceptId) ? <Check size={12} /> : String(index + 1).padStart(2, "0")}</span><div><strong>{lesson.concepts.find((item) => item.id === step.conceptId)?.title}</strong><small>{step.purpose}</small></div></button>)}<button onClick={() => openDetail("practice")}><span><Layers size={13} /></span><div><strong>Final practice</strong><small>Connect what you’ve learned</small></div></button></div>}
+      <button className="sequence-arrow" disabled={activeSceneIndex === 0} onClick={() => goToStep(activeSceneIndex - 1)} aria-label="Previous scene"><ArrowLeft size={16} /></button>
+      <button className="sequence-current" onClick={() => setPathOpen(!pathOpen)} aria-expanded={pathOpen}><span>STEP {String(activeSceneIndex + 1).padStart(2, "0")} OF {String(sequence.length).padStart(2, "0")}</span><strong>{currentTitle}</strong><ChevronDown size={14} /></button>
+      <div className="sequence-dots" aria-label="Teaching steps">{sequence.map((step, index) => <button key={`${step.conceptId}:${index}`} className={index === activeSceneIndex ? "active" : ""} onClick={() => goToStep(index)} aria-label={`Step ${index + 1}: ${lesson.concepts.find((item) => item.id === step.conceptId)?.title}`} aria-current={index === activeSceneIndex ? "step" : undefined} />)}</div>
+      <button className="sequence-inspect" onClick={() => { if (currentStep) selectConcept(currentStep.conceptId); }} aria-label="Open current concept details" title="Concept details"><BookOpen size={16} /></button>
+      <button className="sequence-arrow sequence-next" onClick={() => activeSceneIndex < sequence.length - 1 ? goToStep(activeSceneIndex + 1) : openDetail("practice")} aria-label={activeSceneIndex < sequence.length - 1 ? "Next scene" : "Start final practice"}><ArrowRight size={16} /></button>
+    </footer>
+    {detailView && <aside className="detail-drawer" aria-label="Learning detail" tabIndex={-1} ref={drawerRef}><div className="drawer-header"><nav aria-label="Learning views">{([['learn', 'Learn'], ['sources', 'Sources'], ['practice', 'Practice']] as const).map(([id, label]) => <button key={id} className={detailView === id ? "active" : ""} onClick={() => setDetailView(id)} aria-pressed={detailView === id}>{label}</button>)}</nav><button className="icon-button" onClick={closeDetail} aria-label="Close learning detail"><X size={17} /></button></div><div className="drawer-scroll"><LearningDetail session={session} concept={concept} view={detailView} onSelectConcept={(id) => selectConcept(id)} onShowView={setDetailView} /></div></aside>}
+    {composerOpen && <CanvasDialog onClose={() => setComposerOpen(false)}><NotesComposer session={session} onExploreSample={() => {session.onLoadSample();setComposerOpen(false);}} /></CanvasDialog>}
+  </main>;
+}
 
-  function overview() {
-    setOverviewVersion((value) => value + 1);
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    mapRef.current?.scrollIntoView({ block: "start", behavior: reducedMotion ? "instant" : "smooth" });
-    mapRef.current?.focus({ preventScroll: true });
-  }
-
-  function showView(next: DetailView) {
-    setView(next);
-    revealDetail();
-  }
-
-  function reviewLinks(question: Question) {
-    if (latestAttempts.get(question.id)?.correct !== false) return null;
-    return <div className="review-links"><span>Worth another look:</span>{question.conceptIds.map((id) => {
-      const target = lesson.concepts.find((item) => item.id === id);
-      return target ? <button key={id} onClick={() => selectConcept(id, true)}><RotateCcw size={12} />{target.title}</button> : null;
-    })}</div>;
-  }
-
-  return (
-    <main className="app-shell">
-      <a className="skip-link" href="#study-input">Skip to your notes</a>
-      <aside className="rail" aria-label="Workspace navigation">
-        <a className="brand" href="/" aria-label="SMRTR home">s<span>↗</span></a>
-        <button onClick={overview} aria-label="Map overview" title="Map overview"><Compass size={21} /></button>
-        <button onClick={() => showView("learn")} aria-label="Learn selected concept" title="Learn"><BookOpen size={20} /></button>
-        <button onClick={() => showView("practice")} aria-label="Open final practice" title="Final practice"><Layers size={20} /></button>
-        <span className="rail-bottom" aria-hidden="true">↗</span>
-      </aside>
-      <div className="workspace">
-        <header className="topbar">
-          <a href="/" className="wordmark">SMRTR<span>STUDY, CONNECTED.</span></a>
-          <div className="top-status"><span className="status-dot" />A workspace for your next aha.<span className="prototype">EARLY PREVIEW <ArrowUpRight size={13} /></span></div>
-        </header>
-        <div className="heading">
-          <div><div className="eyebrow">YOUR LEARNING ATLAS</div><h1>A little more <em>connected.</em></h1><p>Bring your notes. See the ideas. Put them into practice.</p></div>
-          <div className="workspace-stat"><strong>{lesson.concepts.length.toString().padStart(2, "0")}</strong><span>ideas to explore</span></div>
-        </div>
-
-        <section className="study-grid" aria-label="Study workspace">
-          <div className="map-column">
-            <section className="input-card" aria-labelledby="input-heading">
-              <div className="section-label"><span id="input-heading"><Sparkles size={15} />Start with a spark</span><button className="text-button" onClick={props.onLoadSample}>Explore sample <ArrowUpRight size={12} /></button></div>
-              <label htmlFor="study-input">A topic, your notes, that tricky lecture.</label>
-              <div className="generation-modes" role="group" aria-label="How to create your lesson"><button className={chatMode ? "active" : ""} aria-pressed={chatMode} onClick={() => props.onGenerationModeChange("chat")}><MessageSquare size={13} />Use my chat<span>No API key</span></button><button className={!chatMode ? "active" : ""} aria-pressed={!chatMode} onClick={() => props.onGenerationModeChange("provider")}><KeyRound size={13} />Provider API</button></div>
-              <p className="mode-explanation">{chatMode ? "Prepare a request for your own LLM chat, then bring the lesson back." : "Generate directly with the provider configured on this app’s server."}</p>
-              <textarea id="study-input" value={props.input} maxLength={40000} onChange={(event) => props.onInputChange(event.target.value)} placeholder="Paste your notes or tell us what you want to understand…" aria-describedby="input-help" />
-              <div className="input-footer">
-                <span id="input-help">{props.input.length.toLocaleString()} / 40,000 characters{inputLength < 10 ? " · Add at least 10 characters" : " · Ready to connect"}</span>
-                {generating ? <button className="primary-button" onClick={props.onCancel}><X size={15} />{waitingForChat ? "Cancel request" : "Cancel"}</button> : <button className="primary-button" disabled={inputLength < 10 || inputLength > 40000} onClick={props.onGenerate}>{chatMode ? "Prepare chat request" : "Build my map"}<ArrowRight size={16} /></button>}
-              </div>
-              {generating && !waitingForChat && <div className="generation-progress" role="status"><LoaderCircle className="spin" size={17} /><div><strong>{chatMode ? "Preparing your chat request…" : "Building a map from your notes…"}</strong><span>{chatMode ? "Your notes will be packaged with the lesson format and instructions." : "Connecting concepts, explanations, and practice. You can keep exploring below."}</span></div><div className="indeterminate-track" /></div>}
-              {chatMode && props.chatRequest && <ChatHandoff key={props.chatRequest.id} chatRequest={props.chatRequest} status={props.status} onCopyChatRequest={props.onCopyChatRequest} onImportChatLesson={props.onImportChatLesson} />}
-              {props.error && <div className="error" role="alert"><strong>Your new map couldn’t be created.</strong><p>{props.error}</p><span>{lesson.mode === "sample" ? "The labeled sample is still available below." : "Your previous lesson is still available below."} Your notes are saved in the box above.</span></div>}
-            </section>
-
-            <section className="map-card" ref={mapRef} tabIndex={-1} aria-labelledby="map-heading">
-              <div className="map-heading"><div><span className="eyebrow">THE BIG PICTURE</span><h2 id="map-heading">{lesson.title}</h2></div><span className={`sample-badge ${lesson.mode === "generated" ? "generated-badge" : ""}`}>{lessonBadge}</span></div>
-              <p className="map-summary">{lesson.summary}</p>
-              {lesson.mode === "sample" && <p className="sample-note">A prepared example to explore. Build a new map above to use your own notes.</p>}
-              <ConceptMap lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id)} practiced={practiced} needsReview={needsReview} overviewVersion={overviewVersion} />
-              <div className="map-footer"><span><i className="legend-prerequisite" />Prerequisite → next idea</span><span><i className="legend-related" />Related</span>{lesson.relations.some((relation) => relation.type === "contrast") && <span><i className="legend-contrast" />Contrast</span>}{lesson.relations.some((relation) => relation.type === "example") && <span><i className="legend-example" />Example →</span>}<button onClick={overview}><Focus size={12} />Fit map</button></div>
-            </section>
-
-            <section className="path-card" aria-labelledby="path-heading">
-              <div className="path-heading"><span id="path-heading"><Compass size={16} />YOUR GUIDED PATH</span><span>{practiced.size} / {lesson.concepts.length} practiced</span></div>
-              <div className="path-steps">{path.map((id, index) => {
-                const target = lesson.concepts.find((item) => item.id === id)!;
-                return <button key={id} className={`path-step ${id === concept.id && view === "learn" ? "active" : ""}`} onClick={() => selectConcept(id)} aria-current={id === concept.id && view === "learn" ? "step" : undefined}><span className="path-number">{practiced.has(id) ? <Check size={13} /> : String(index + 1).padStart(2, "0")}</span><span>{target.title}{needsReview.has(id) && <small>Suggested review</small>}</span><ArrowRight size={13} /></button>;
-              })}<button className={`path-step path-practice ${view === "practice" ? "active" : ""}`} onClick={() => showView("practice")}><span className="path-number"><Layers size={13} /></span><span>Bring it together<small>Final practice</small></span><ArrowRight size={13} /></button></div>
-              <p>Follow the path, or jump into any idea on the map.</p>
-            </section>
-          </div>
-
-          <aside className="lesson-card" ref={detailRef} tabIndex={-1} aria-label="Learning detail">
-            <nav className="detail-tabs" aria-label="Learning views">{([['learn', 'Learn', BookOpen], ['sources', 'Sources', FileText], ['practice', 'Final practice', Layers]] as const).map(([id, label, Icon]) => <button key={id} onClick={() => setView(id)} className={view === id ? "active" : ""} aria-pressed={view === id}><Icon size={14} />{label}</button>)}</nav>
-            {view === "learn" && <>
-              <div className="lesson-topline"><button onClick={overview}><ArrowLeft size={12} />Map overview</button><span>{pathIndex >= 0 ? `CONCEPT ${String(pathIndex + 1).padStart(2, "0")} / ${String(path.length).padStart(2, "0")}` : "EXPLORE A CONNECTION"}</span></div>
-              <div className="lesson-content" key={concept.id}>
-                <div className="concept-title-row"><div className="concept-icon" aria-hidden="true">↗</div>{needsReview.has(concept.id) && <span className="review-badge">Suggested review</span>}</div>
-                <h2>{concept.title}</h2><p className="concept-summary">{concept.summary}</p>
-                <div className="learning-objective"><span className="eyebrow">YOUR TAKEAWAY</span><p>{concept.objective}</p></div>
-                <div className="lesson-divider" /><span className="eyebrow">THE IDEA</span>
-                <p className="explanation">{module?.explanation ?? concept.summary}</p>
-                {module && <>
-                  <div className="example"><span className="eyebrow">WORKED EXAMPLE</span><p>{module.example}</p><span className="example-caption">Lesson illustration · see Sources for original passages</span></div>
-                  <ActivityView key={`${lesson.id}:${lesson.revision}:${module.id}`} activity={module.activity} conceptId={concept.id} />
-                  {module.questions.map((question) => <div key={`${lesson.revision}:${question.id}`}><QuestionView question={question} onAnswer={(answer, evaluation) => props.onAnswer(question, answer, evaluation)} />{reviewLinks(question)}</div>)}
-                </>}
-                <div className="concept-connections"><span className="eyebrow">CONNECT THE DOTS</span>{related.length ? related.map((relation) => {
-                  const otherId = relation.source === concept.id ? relation.target : relation.source;
-                  const other = lesson.concepts.find((item) => item.id === otherId);
-                  const label = relation.type === "prerequisite" ? relation.target === concept.id ? "Builds on" : "Prepares you for" : relation.type === "contrast" ? "Compare with" : relation.type === "example" ? relation.target === concept.id ? "Example of" : "See an example" : "Related idea";
-                  return other ? <button key={relation.id} onClick={() => selectConcept(otherId, true)}><span>{label}</span><strong>{other.title}</strong><ArrowUpRight size={14} /></button> : null;
-                }) : <p>Use the guided path to explore the next idea.</p>}</div>
-                <button className="source-link" onClick={() => showView("sources")}><FileText size={14} />Read the supporting source passages<ArrowUpRight size={14} /></button>
-              </div>
-              <footer className="lesson-footer"><button className="secondary-button" disabled={pathIndex <= 0} onClick={() => selectConcept(path[pathIndex - 1], true)}><ArrowLeft size={14} />Previous</button><button className="primary-button" onClick={() => pathIndex >= 0 && pathIndex < path.length - 1 ? selectConcept(path[pathIndex + 1], true) : showView("practice")}>{pathIndex >= 0 && pathIndex < path.length - 1 ? "Next concept" : "Final practice"}<ArrowRight size={14} /></button></footer>
-            </>}
-            {view === "sources" && <SourcePassages lesson={lesson} concept={concept} sourceIds={[...new Set([...concept.sourceIds, ...(module?.sourceIds ?? [])])]} onSelectConcept={(id) => selectConcept(id, true)} />}
-            {view === "practice" && <div className="lesson-content practice-content"><span className="eyebrow">BRING IT TOGETHER</span><h2>Make it stick.</h2><p>Connect the ideas in this lesson. Each question links back to the concepts it uses.</p><div className="practice-status"><Layers size={16} /><span>{lesson.finalQuestions.filter((question) => latestAttempts.has(question.id)).length} of {lesson.finalQuestions.length} questions checked</span></div>{lesson.finalQuestions.length ? lesson.finalQuestions.map((question, index) => <div className="final-question" key={`${lesson.revision}:${question.id}`}><div className="final-question-header"><span>QUESTION {String(index + 1).padStart(2, "0")}</span><div>{question.conceptIds.map((id) => {
-              const target = lesson.concepts.find((item) => item.id === id);
-              return target ? <button key={id} onClick={() => selectConcept(id, true)}>{target.title}<ArrowUpRight size={11} /></button> : null;
-            })}</div></div><QuestionView question={question} onAnswer={(answer, evaluation) => props.onAnswer(question, answer, evaluation)} />{reviewLinks(question)}</div>) : <p className="empty-state">This lesson has no final questions. Try the checks inside each concept.</p>}<p className="practice-note">A check is a snapshot, not a mastery score. Follow a review link whenever something feels unclear.</p><button className="secondary-button" onClick={overview}><Compass size={14} />Return to the map</button></div>}
-          </aside>
-        </section>
-        <footer className="page-footer"><span>Follow the connections. Find your understanding.</span><span>Made for curious minds. ↗</span></footer>
-      </div>
-    </main>
-  );
+function CanvasDialog({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  useEffect(() => { const dialog = ref.current; dialog?.showModal(); dialog?.querySelector("textarea")?.focus(); return () => dialog?.close(); }, []);
+  return <dialog ref={ref} className="composer-dialog" aria-label="Create a learning canvas" aria-describedby={titleId} onCancel={onClose} onClick={(event) => {if(event.target === event.currentTarget) onClose();}}><div className="composer-dialog-inner"><span id={titleId} className="sr-only">Add a topic or notes, prepare a request for your chat, or generate with a configured provider.</span><button className="dialog-close icon-button" onClick={onClose} aria-label="Close notes and return to canvas"><X size={19} /></button>{children}</div></dialog>;
 }

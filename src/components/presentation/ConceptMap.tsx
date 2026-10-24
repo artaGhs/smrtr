@@ -19,7 +19,7 @@ function MapConcept({ data }: NodeProps<ConceptNode>) {
 }
 
 const nodeTypes = { concept: MapConcept };
-const relationColor = { prerequisite: "#6c8757", related: "#a1a99b", contrast: "#b68962", example: "#7d98a6" };
+const relationColor = { prerequisite: "#8293bd", related: "#b8c1d0", contrast: "#d3aa7b", example: "#95a9e4" };
 
 export function ConceptMap({ lesson, selectedConceptId, onSelectConcept, practiced, needsReview, overviewVersion }: {
   lesson: Lesson;
@@ -59,5 +59,5 @@ export function ConceptMap({ lesson, selectedConceptId, onSelectConcept, practic
   });
   useEffect(() => { if (instance) void instance.fitView({ padding: 0.18, duration: 250 }); }, [instance, overviewVersion, lesson.id, lesson.revision]);
 
-  return <div className="flow-map" aria-label="Connected concept map. Use the concept buttons to explore; drag the background to pan."><ReactFlow<ConceptNode> nodes={nodes} edges={edges} nodeTypes={nodeTypes} onInit={setInstance} fitView fitViewOptions={{ padding: 0.18 }} minZoom={0.25} maxZoom={1.6} nodesDraggable={false} nodesConnectable={false} edgesFocusable={false} panOnScroll zoomOnDoubleClick={false} preventScrolling={false}><Background gap={22} size={1} color="#cdd4c3" /><Controls showInteractive={false} position="bottom-left" /></ReactFlow><div className="map-hint" aria-hidden="true">Drag to explore · select an idea</div></div>;
+  return <div className="flow-map" aria-label="Connected concept map. Use the concept buttons to explore; drag the background to pan."><ReactFlow<ConceptNode> nodes={nodes} edges={edges} nodeTypes={nodeTypes} onInit={setInstance} fitView fitViewOptions={{ padding: 0.18 }} minZoom={0.25} maxZoom={1.6} nodesDraggable={false} nodesConnectable={false} edgesFocusable={false} panOnScroll zoomOnDoubleClick={false} preventScrolling={false}><Background gap={22} size={1} color="#e0e5ee" /><Controls showInteractive={false} position="bottom-left" /></ReactFlow><div className="map-hint" aria-hidden="true">Drag to explore · select an idea</div></div>;
 }
