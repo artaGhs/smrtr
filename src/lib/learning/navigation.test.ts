@@ -16,7 +16,13 @@ import {
 
 const { design } = normalizeLearningDesign(sampleLesson);
 test("a two-level drilldown returns the exact main frontier, target and reading position", () => {
-  let state = initialNavigation(sampleLesson, design, "page-bfs");
+  const supportDesign = {
+    ...design,
+    pages: design.pages.map((page) =>
+      page.id === "page-queue" ? { ...page, kind: "support" as const } : page,
+    ),
+  };
+  let state = initialNavigation(sampleLesson, supportDesign, "page-bfs");
   state = setLearningSimulation(state, "bfs", {
     start: "S",
     directed: true,
@@ -25,14 +31,26 @@ test("a two-level drilldown returns the exact main frontier, target and reading 
     target: "T",
   });
   state = { ...state, location: { ...state.location, scrollTop: 184 } };
-  state = openLearningPage(state, sampleLesson, design, "page-queue", 184);
+  state = openLearningPage(
+    state,
+    sampleLesson,
+    supportDesign,
+    "page-queue",
+    184,
+  );
   assert.equal(state.location.simulations.bfs.step, 2);
   state = setLearningSimulation(state, "bfs", {
     ...state.location.simulations.bfs,
     step: 3,
     target: "C",
   });
-  state = openLearningPage(state, sampleLesson, design, "detail-queue-0", 92);
+  state = openLearningPage(
+    state,
+    sampleLesson,
+    supportDesign,
+    "detail-queue-0",
+    92,
+  );
   assert.equal(state.location.mainPageId, "page-bfs");
   state = setLearningSimulation(state, "bfs", {
     ...state.location.simulations.bfs,
@@ -111,4 +129,21 @@ test("self-reported confidence chooses a different starting route and uses stabl
     design.routes.new[0],
   );
   assert.equal(backLearningPage(simpler).location.pageId, experienced);
+});
+
+test("opening an unvisited overview temporarily offers the complete novice route and back restores the experienced context", () => {
+  const entry = initialNavigation(sampleLesson, design, "page-paths");
+  const intro = openLearningPage(
+    entry,
+    sampleLesson,
+    design,
+    "lesson-overview",
+    120,
+  );
+  assert.equal(intro.location.routeLevel, "new");
+  assert.equal(intro.location.mainPageId, "lesson-overview");
+  const returned = backLearningPage(intro);
+  assert.equal(returned.location.pageId, "page-paths");
+  assert.equal(returned.location.routeLevel, undefined);
+  assert.equal(returned.location.scrollTop, 120);
 });

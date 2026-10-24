@@ -32,11 +32,8 @@ export function openLearningPage(
   pageId: string,
   scrollTop?: number,
 ): PageNavigationState {
-  if (
-    !design.pages.some((page) => page.id === pageId) ||
-    pageId === state.location.pageId
-  )
-    return state;
+  const target = design.pages.find((page) => page.id === pageId);
+  if (!target || pageId === state.location.pageId) return state;
   const previous = state.history.findLastIndex(
     (location) => location.pageId === pageId,
   );
@@ -53,6 +50,8 @@ export function openLearningPage(
     location: {
       ...structuredClone(entry),
       pageId,
+      mainPageId: target.kind === "support" ? entry.mainPageId : pageId,
+      routeLevel: target.kind === "overview" ? "new" : entry.routeLevel,
       sceneIndex: pageSceneIndex(lesson, pageId, design),
       scrollTop: 0,
     },
