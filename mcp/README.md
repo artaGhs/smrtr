@@ -2,7 +2,7 @@
 
 SMRTR can hand a lesson request to the model in your current chat. This local bridge exposes three MCP tools: list pending requests, read one request, and submit a complete structured lesson. The bridge does not call a model, require a provider API key, or run generated code. Your chat supplies the lesson content; SMRTR validates it and computes BFS answer keys before saving it.
 
-This first version requires a **local MCP host that can launch stdio servers** and a local SMRTR app sharing the same request directory. A chat that only accepts remote HTTPS MCP servers cannot connect to this stdio process. Use the manual bridge below from a coding chat with local terminal access instead. A normal web chat without local MCP or terminal access needs someone to carry its JSON output to the submission command.
+This first version requires a **local MCP host that can launch stdio servers** and a local SMRTR app sharing the same request directory. A chat that only accepts remote HTTPS MCP servers cannot connect to this stdio process. Use the manual bridge below from a coding chat with local terminal access instead. A normal web chat without local MCP or terminal access can return lesson JSON for the website’s **Paste a lesson from my chat** form. The manual CLI below is another supported bridge.
 
 ## Install and start the app
 
