@@ -15,7 +15,7 @@ npm run dev
 
 Open [localhost:3000](http://localhost:3000). The app starts with a **labeled sample lesson**. The preferred **Use my chat** workflow needs no provider API key.
 
-1. Enter notes or a topic and select **Prepare chat request**.
+1. Enter notes or a topic, choose your current confidence, and select **Prepare chat request**. Optional topic rows can override that overall level.
 2. Have a compatible local MCP chat read and complete the request, or copy its instructions into your chat and paste the returned lesson JSON into the website.
 3. The server validates the lesson and computes BFS answer keys. The waiting page loads the result automatically.
 
@@ -34,12 +34,17 @@ npm ci --cache /tmp/smrtr-npm-cache
 ## Learning flow
 
 - Explore a full-screen visual teaching canvas with blue controls and a dismissible details panel. The separate Connections view shows concept relationships.
-- Start with an accessible example, then follow a teaching sequence that is independent of prerequisite order.
+- Follow a coherent main route: problem, intuitive layers, mechanism questions, reasoning and limits, then transfer. Newly authored lessons keep one continuing scenario through the main explanation.
+- Open linked supporting pages, such as Queue → FIFO, then return to the same page, scroll position and simulation state. Optional detours do not add steps to the main route.
+- Keep three structures distinct: the teaching sequence, the page hierarchy and the concept relationship graph. Breadcrumbs describe containment; Connections explains how ideas relate.
+- Choose among four self-reported confidence levels before generation. The captured profile affects both the suggested route and the authoring instructions/content. Topic labels are entered manually, retain stable IDs, and can use the overall level. A temporary **Start more simply** route leaves that captured profile intact.
 - Read explanations and generated examples separately from original source material.
 - Step through a computed BFS graph, change its inputs, predict the next expansion, and inspect paths.
 - Check concept questions and final practice, then follow specific review links.
 
-The BFS teaching canvas turns actual graph data into delivery landmarks, roads, waiting parcels, discovery marks and distance layers. Other topics retain their own generated guided steps without being mislabeled as algorithm simulations.
+The BFS teaching canvas turns actual graph data into delivery landmarks, roads, waiting parcels, discovery marks and distance layers. The novice opening presents the delivery problem first; later pages reveal the queue and discovery mechanisms. A transfer example is explicitly labeled and can use a different graph. Other topics retain their own generated guided steps without being mislabeled as algorithm simulations.
+
+New chat requests require an authored page hierarchy, meaningful inline links, explicit transitions and confidence routes. Saved older lessons open as **Adapted saved lesson** using a compatibility hierarchy; they are not presented as newly authored designs. Confidence is self-report, and practice does not claim measured mastery.
 
 The BFS engine uses fixed, tested code with alphabetical neighbor order and discovery on enqueue. It finds paths with the fewest edges in unweighted graphs. Attempts keep the lesson ID and revision; a missed check suggests review and does not assert mastery.
 

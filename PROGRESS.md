@@ -43,3 +43,17 @@ A fresh browser completed the redesigned flow with empty notes, an actual waitin
 Actual browser checks: persistent visible scenes, two expansions produce parcels B,C,D; changing scenes preserves graph state; selecting a concept opens the dismissible inspector; source excerpts remain exact; an incorrect computed final answer links back to the corresponding teaching scene; fresh entry/import works; desktop resize and 390px mobile layout work with no page overflow; current console has no errors or warnings.
 
 Final redesign validation: **66 app tests + 4 actual MCP protocol/CLI tests**, TypeScript and production build pass. Rich computed visual teaching currently covers BFS; other generated topics use their actual explanation steps and do not claim algorithm execution. Elaborate animation remains later scope. Blue/neutral theme tokens remain easy to refine after design references arrive.
+
+## Coherent hierarchy and confidence routes
+
+- Authored learning designs now separate teaching sequence, page containment and semantic connections. One continuing delivery example runs from a meaningful problem through intuitive layers, queue/discovery questions, reasoning and limits. A separately labeled graph provides transfer practice.
+- Reusable inline support links allow Strategy → Queue → FIFO detours. Breadcrumbs and Back restore exact reading context, scene, target and simulation state; detours do not inflate the core route.
+- Four confidence levels and optional manually named topic overrides are captured before generation with stable IDs. Immutable request/export snapshots drive route selection and actual authoring content. Start more simply is reversible navigation. Incomplete confidence edits cannot discard a completed saved lesson.
+- Strict chat/provider validation checks hierarchy, source/concept/topic/link references, transition reasons, substantive routes, explanatory relationships and canonical graph consistency. Legacy lessons are explicitly adapted. Keyless MCP/CLI import, revisions and cancellation remain supported.
+- The novice visual opening shows only the delivery problem and assumptions. Queue, discovery and FIFO terminology appears after its introduction. Mobile preserves a bounded canvas and 44px simulation controls.
+
+Two fresh lessons were authored by this chat through actual website-created local requests: a novice route and an experienced route with a novice Queue override. Both use explicitly labeled authored example input, not an uploaded lecture. Their prose and starting routes differ, and their original confidence snapshots remain intact. Runtime lessons and drafts remain ignored local data.
+
+Actual browser acceptance covered novice and experienced entry, nested Queue/FIFO detours and exact return, reversible simpler route, canonical scenario continuity, distinct transfer graph, page-aware original sources, computed incorrect-answer feedback and concept review, and 390px mobile layout with no page overflow. Final browser console had no warnings or errors.
+
+Final verification: **90 app tests + 6 actual MCP protocol/CLI tests**, TypeScript and optimized production build passed. Rich computed visuals currently cover BFS. Confidence is self-report; topic rows are entered manually. Optional direct-provider generation remains mock-tested without a live key.
