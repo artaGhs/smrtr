@@ -380,3 +380,6 @@ a.source-locator { color: var(--accent); text-decoration: underline; text-underl
   .scenario-context > p { font-size: 10px; }
   .hierarchy-visual .react-flow__controls { margin: 0 0 12px 0 !important; }
 }
+.concept-connections > button > .connection-description { width: auto; flex: 1; }
+.connection-description > strong { display: block; }
+.connection-description > .connection-meaning { display: block; font-size: 9px; line-height: 1.8; color: #95a4bd; margin-top: 5px; }
