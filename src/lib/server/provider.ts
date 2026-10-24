@@ -60,10 +60,16 @@ export function createOpenAIProvider(options: {
       }
       const raw = await response.text();
       if (raw.length > 1_000_000) throw new GenerationError("PROVIDER_INVALID_OUTPUT", "The provider returned too much content. Try a narrower topic.");
-      let payload: { status?: string; output?: { type?: string; content?: { type?: string; text?: string }[] }[] };
-      try { payload = JSON.parse(raw); }
+      let decoded: unknown;
+      try { decoded = JSON.parse(raw); }
       catch { throw new GenerationError("PROVIDER_INVALID_OUTPUT", "The provider returned an unreadable response. Please try again."); }
+      if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new GenerationError("PROVIDER_INVALID_OUTPUT", "The provider returned an invalid response envelope. Please try again.");
+      const payload = decoded as { status?: string; output?: { type?: string; content?: { type?: string; text?: string }[] }[] };
       if (payload.status === "incomplete") throw new GenerationError("PROVIDER_INCOMPLETE", "The lesson exceeded the generation limit. Try a narrower topic or shorter notes.");
+      if (payload.status === "failed" || payload.status === "cancelled") throw new GenerationError("PROVIDER_UNAVAILABLE", "The provider could not complete this generation. Please try again.", 503);
+      if (!Array.isArray(payload.output) || payload.output.some((item) => !item || typeof item !== "object" || (item.type === "message" && (!Array.isArray(item.content) || item.content.some((block) => !block || typeof block !== "object"))))) {
+        throw new GenerationError("PROVIDER_INVALID_OUTPUT", "The provider returned an invalid response envelope. Please try again.");
+      }
       const blocks = payload.output?.filter((item) => item.type === "message").flatMap((item) => item.content ?? []) ?? [];
       if (blocks.some((item) => item.type === "refusal")) throw new GenerationError("PROVIDER_REFUSED", "The provider could not create a lesson from this input. Try different study material.", 422);
       const output = blocks.filter((item) => item.type === "output_text").map((item) => item.text ?? "").join("");
