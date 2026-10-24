@@ -103,7 +103,8 @@ export async function generateLesson(input: unknown, options: Options = {}) {
           if (module.conceptId !== conceptId || module.id !== `module-${conceptId}`) throw new LessonValidationError(["module must match targetConceptId and required module ID"]);
           if (module.activity.kind === "bfs") {
             try {
-              const computed = createBfsQuestions(module.activity, conceptId, module.id);
+              const transfer = plan.learningDesign?.scenario.activityConceptId !== conceptId && plan.learningDesign?.pages.some((page) => page.kind === "transfer" && page.activityConceptId === conceptId);
+              const computed = createBfsQuestions(module.activity, conceptId, module.id, { transfer });
               distanceQuestion = computed.finalQuestion;
               module = { ...module, example: computed.example, questions: [computed.moduleQuestion] };
             } catch {

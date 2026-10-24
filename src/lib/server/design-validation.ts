@@ -26,11 +26,12 @@ export function validateLearningDesign(lesson: Lesson, check: (condition: boolea
     try { validateBfs(canonical); } catch { check(false, "canonical scenario BFS inputs are invalid"); }
     const entityIds = new Set(design.scenario.entities.map((entity) => entity.id));
     check(canonical.nodes.every((id) => entityIds.has(id)), "scenario BFS nodes must use the continuing scenario entity IDs");
+  } else if (canonical?.kind === "concept") {
+    check(useful(canonical.prompt) && canonical.steps.length <= 8 && canonical.steps.every((step) => useful(step.title, 1, 300) && useful(step.body)), "canonical concept activity must contain bounded useful steps");
   }
   if (canonical && canonicalConcept) {
     const module = lesson.modules.find((item) => item.conceptId === canonicalConcept);
     if (!partial || module) check(!!module && JSON.stringify(module.activity) === JSON.stringify(canonical), "scenario activity must exactly match its canonical module activity");
-    lesson.modules.filter((item) => item.activity.kind === "bfs" && !transferConcepts.has(item.conceptId)).forEach((item) => check(JSON.stringify(item.activity) === JSON.stringify(canonical), "core and support BFS modules must reuse the canonical scenario graph"));
   }
   lesson.modules.filter((item) => item.activity.kind === "bfs" && !transferConcepts.has(item.conceptId)).forEach((item) => check(canonical?.kind === "bfs" && JSON.stringify(item.activity) === JSON.stringify(canonical), "core BFS activity requires the exact canonical scenario graph"));
   const pages = new Map(design.pages.map((page) => [page.id, page]));
