@@ -542,10 +542,10 @@
   place-items: center;
   flex-shrink: 0;
 }
-.conceptSteps button[aria-selected="true"] {
+.conceptSteps button[aria-pressed="true"] {
   color: #3865df;
 }
-.conceptSteps button[aria-selected="true"] > span {
+.conceptSteps button[aria-pressed="true"] > span {
   background: #3865df;
   color: #fff;
   border-color: #3865df;
@@ -881,4 +881,20 @@
 }
 .canvasHint {
   bottom: 85px;
+}
+
+.mobileScene .roadLegend {
+  display: none;
+}
+.mobileScene .predictionNote {
+  top: 1000px;
+}
+.mobilePlayback .mobilePanHint {
+  position: absolute;
+  top: -25px;
+  left: 5px;
+  font-size: 10px;
+  letter-spacing: 0;
+  color: #8b98ae;
+  white-space: nowrap;
 }
