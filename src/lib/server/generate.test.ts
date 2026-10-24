@@ -280,6 +280,37 @@ test("BFS model answer keys are replaced by computed questions", async () => {
   assert.equal(lesson.finalQuestions[0].id, "module-foundation-computed-distance");
 });
 
+test("core graph mismatch repairs to the canonical scenario while transfer can use another network", async () => {
+  const parts = lessonParts("BFS");
+  const learningDesign = testLearningDesign(["foundation", "application"], undefined, { conceptId: "foundation", activity: graph });
+  const transferGraph: BfsActivity = { ...graph, nodes: ["R", "U", "V"], edges: [{ source: "R", target: "U" }, { source: "U", target: "V" }], start: "R" };
+  learningDesign.pages[1].activityConceptId = "application";
+  learningDesign.pages[1].scene = "route";
+  let foundationCalls = 0;
+  const provider: LessonProvider = { async generate(request) {
+    const payload = JSON.parse(request.input);
+    if (request.schemaName === "study_plan") return { status: "ready", reason: "", plan: { ...parts.plan, learningDesign } };
+    const module = parts.content.modules.find((item) => item.conceptId === payload.targetConceptId)!;
+    if (payload.targetConceptId === "application") return { module: { ...module, activity: transferGraph } };
+    foundationCalls++;
+    return { module: { ...module, activity: foundationCalls === 1 ? { ...graph, start: "A" } : graph } };
+  } };
+  const { lesson } = await generateLesson({ requestId: "canonical-bfs", text: "Breadth-first search (BFS) explores a delivery network in layers." }, { provider });
+  assert.equal(foundationCalls, 2);
+  assert.deepEqual(lesson.modules[0].activity, lesson.learningDesign!.scenario.activity);
+  assert.deepEqual(lesson.modules[1].activity, transferGraph);
+  assert.match(lesson.modules[1].example, /^Generated transfer example:/);
+  assert.match(lesson.modules[1].questions[0].prompt, /^Generated transfer example:/);
+  const bad = structuredClone(lesson);
+  bad.learningDesign!.pages[0].activityConceptId = "application";
+  assert.throws(() => validateLesson(bad, lesson.sources[0].text));
+});
+
+test("duplicate manual topic IDs are rejected before generation", async () => {
+  const provider: LessonProvider = { async generate() { assert.fail("No provider call for ambiguous topic IDs"); } };
+  await assert.rejects(generateLesson({ requestId: "duplicate-topic", text: "Biology investigates living organisms.", learnerProfile: { overall: "new", topics: [{ id: "same", label: "First topic", level: "new" }, { id: "same", label: "Other topic", level: "apply" }] } }, { provider }), (error: unknown) => error instanceof GenerationError && error.code === "INVALID_LEARNER_PROFILE");
+});
+
 test("semantic validation rejects invented sources, bad options, prerequisite cycles and unverified links", async () => {
   const { lesson } = await generateLesson({ requestId: "valid", text: "Biology investigates living organisms." }, { provider: providerFor("Biology") });
   const mutations = [

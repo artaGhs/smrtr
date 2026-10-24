@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { GenerationRequestSchema, LessonSchema, LearnerProfileSchema, type LearnerProfile, type Lesson, type Question } from "../contracts";
+import { GenerationRequestSchema, LessonSchema, LearnerProfileSchema, type Lesson, type Question } from "../contracts";
 import { createBfsQuestions } from "./bfs-questions";
 import { GenerationError } from "./errors";
 import { SOURCE_ID, SYSTEM_INSTRUCTIONS, providerJsonSchema } from "./schemas";
@@ -117,7 +117,8 @@ function prepareChatLesson(candidate: unknown, request: ChatRequest): Lesson {
   const computedFinal: Question[] = [];
   const modules = parsed.data.modules.map((module) => {
     if (module.activity.kind !== "bfs") return module;
-    const computed = createBfsQuestions(module.activity, module.conceptId, module.id);
+    const transfer = parsed.data.learningDesign?.scenario.activityConceptId !== module.conceptId && parsed.data.learningDesign?.pages.some((page) => page.kind === "transfer" && page.activityConceptId === module.conceptId);
+    const computed = createBfsQuestions(module.activity, module.conceptId, module.id, { transfer });
     computedFinal.push(computed.finalQuestion);
     return { ...module, example: computed.example, questions: [computed.moduleQuestion] };
   });

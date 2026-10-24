@@ -10,15 +10,15 @@ export function computeBfs(activity: BfsActivity) {
   return { order: [...final.expanded], distances: new Map(Object.entries(final.distances)) };
 }
 
-function graphDescription(activity: BfsActivity) {
+function graphDescription(activity: BfsActivity, transfer = false) {
   const arrow = activity.directed ? "→" : "—";
   const edges = activity.edges.map((edge) => `${edge.source}${arrow}${edge.target}`).join(", ") || "none";
-  return `Generated example: ${activity.directed ? "directed" : "undirected"}, unweighted graph. Nodes: ${activity.nodes.join(", ")}. Edges: ${edges}. Start: ${activity.start}. Visit neighbors in ASCII alphabetical order; mark visited when enqueued.`;
+  return `Generated ${transfer ? "transfer " : ""}example: ${activity.directed ? "directed" : "undirected"}, unweighted graph. Nodes: ${activity.nodes.join(", ")}. Edges: ${edges}. Start: ${activity.start}. Visit neighbors in ASCII alphabetical order; mark visited when enqueued.`;
 }
 
-export function createBfsQuestions(activity: BfsActivity, conceptId: string, moduleId: string): { example: string; moduleQuestion: Question; finalQuestion: Question } {
+export function createBfsQuestions(activity: BfsActivity, conceptId: string, moduleId: string, context: { transfer?: boolean } = {}): { example: string; moduleQuestion: Question; finalQuestion: Question } {
   const { order, distances } = computeBfs(activity);
-  const example = graphDescription(activity);
+  const example = graphDescription(activity, context.transfer);
   const answer = order.join(", ");
   const alternatives = [
     [...order].reverse().join(", "),

@@ -83,3 +83,17 @@ test("Next bind-address normalization accepts the browser Host but never a forge
   const wrongPort = await create(new Request(normalized, { ...json({ text: "Binary search requires sorted input." }), headers: { Host: "localhost:3000", Origin: "http://localhost:4000" } }));
   assert.equal(wrongPort.status, 403);
 }));
+
+test("HTTP request profile is visible before fulfillment, exported unchanged and validated", async () => localStore(async () => {
+  const learnerProfile = { overall: "apply", topics: [{ id: "topic-sorted", label: "Sorted input", level: "new" }] };
+  const created = await create(new Request(url, json({ text: "Binary search requires sorted input.", learnerProfile })));
+  assert.equal(created.status, 201);
+  const pending = await created.json();
+  assert.deepEqual(pending.learnerProfile, learnerProfile);
+  const polled = await get(new Request(`${url}/${pending.id}`), context(pending.id));
+  assert.deepEqual((await polled.json()).learnerProfile, learnerProfile);
+  const exported = await exportRequest(new Request(`${url}/${pending.id}/export`), context(pending.id));
+  assert.deepEqual((await exported.json()).requiredMetadata.learnerProfile, learnerProfile);
+  const invalid = await create(new Request(url, json({ text: "Binary search requires sorted input.", learnerProfile: { overall: "mastered", topics: [] } })));
+  assert.equal(invalid.status, 400);
+}));
