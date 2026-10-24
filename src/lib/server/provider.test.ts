@@ -72,6 +72,7 @@ test("provider schema uses supported nested anyOf and enum for activity variants
 test("new provider plans require an explicit teaching strategy", () => {
   const schema = providerJsonSchema(PlanSchema);
   assert.ok((schema.required as string[]).includes("teachingPlan"));
+  assert.ok((schema.required as string[]).includes("learningDesign"));
   const teaching = (schema.properties as Record<string, Record<string, unknown>>).teachingPlan;
   assert.deepEqual(teaching.required, ["openingQuestion", "bigPicture", "sequence"]);
 });
