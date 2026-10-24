@@ -4,12 +4,13 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, FileText, Layers, LoaderCircle, Map as MapIcon, MessageSquare, Plus, Shapes, X } from "lucide-react";
 import type { StudyWorkspaceProps } from "@/lib/contracts";
 import { getTeachingSequence } from "@/lib/teaching/sequence";
+import { LearningCanvas } from "@/components/canvas/LearningCanvas";
 import { ConceptMap } from "./ConceptMap";
 import { LearningDetail, type DetailView } from "./LearningDetail";
 import { NotesComposer } from "./NotesComposer";
 
 export function StudyWorkspace(props: StudyWorkspaceProps) {
-  return <CanvasWorkspace key={`${props.lesson.id}:${props.lesson.revision}`} {...props} />;
+  return <CanvasWorkspace {...props} />;
 }
 
 function CanvasWorkspace(session: StudyWorkspaceProps) {
@@ -22,6 +23,7 @@ function CanvasWorkspace(session: StudyWorkspaceProps) {
   const [overviewVersion, setOverviewVersion] = useState(0);
   const drawerRef = useRef<HTMLElement>(null);
   const drawerTrigger = useRef<HTMLElement | null>(null);
+  const shownRevision = useRef(`${lesson.id}:${lesson.revision}`);
   const concept = lesson.concepts.find((item) => item.id === session.selectedConceptId) ?? lesson.concepts[0];
   const sequence = getTeachingSequence(lesson);
   const currentStep = sequence[activeSceneIndex] ?? sequence[0];
@@ -33,6 +35,16 @@ function CanvasWorkspace(session: StudyWorkspaceProps) {
   const badge = lesson.mode === "sample" ? "Sample" : lesson.origin === "chat" ? "From your chat" : "From your notes";
   const waiting = session.status === "generating";
 
+  useEffect(() => {
+    const revision = `${lesson.id}:${lesson.revision}`;
+    if (shownRevision.current !== revision) {
+      shownRevision.current = revision;
+      setComposerOpen(false);
+      setDetailView(null);
+      setActiveSceneIndex(0);
+      setPathOpen(false);
+    }
+  }, [lesson.id, lesson.revision]);
   useEffect(() => {
     if (detailView) {
       drawerRef.current?.focus({preventScroll: true});
@@ -73,7 +85,7 @@ function CanvasWorkspace(session: StudyWorkspaceProps) {
   return <main className={`canvas-workspace ${detailView ? "has-detail" : ""}`}>
     <a className="skip-link" href="#guided-sequence">Skip to guided sequence</a>
     <section className="canvas-stage" aria-label="Learning canvas">
-      <ConceptMap lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id)} practiced={practiced} needsReview={needsReview} overviewVersion={overviewVersion} />
+      {canvasMode === "lesson" ? <LearningCanvas key={`${lesson.id}:${lesson.revision}`} lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id, false)} onOpenConcept={(id) => selectConcept(id)} activeSceneIndex={activeSceneIndex} onSceneChange={(index) => goToStep(index)} /> : <ConceptMap lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id)} practiced={practiced} needsReview={needsReview} overviewVersion={overviewVersion} />}
     </section>
     <header className="canvas-header">
       <div className="canvas-identity"><button className="canvas-wordmark" onClick={() => setComposerOpen(true)} aria-label="SMRTR — open topic or notes">smrtr<span>↗</span></button><span className="header-divider" /><div className="canvas-document"><span className="canvas-document-title">{lesson.title}</span><span className="lesson-origin">{badge}</span></div></div>
