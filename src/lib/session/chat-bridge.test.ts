@@ -64,3 +64,32 @@ test("failed and incomplete chat completions stay explicit", async () => {
     /complete lesson JSON/,
   );
 });
+
+test("new chat requests carry an immutable snapshot of confidence settings before fulfillment", async () => {
+  const { createChatRequest } = await import("./chat-bridge");
+  const originalFetch = globalThis.fetch;
+  let body: Record<string, unknown> | undefined;
+  globalThis.fetch = (async (_url, options) => {
+    body = JSON.parse(options?.body as string);
+    return Response.json(request);
+  }) as typeof fetch;
+  const profile = {
+    overall: "recognize" as const,
+    topics: [{ id: "topic-queue", label: "Queues", level: "new" as const }],
+  };
+  try {
+    await createChatRequest(
+      "profile-request",
+      "Teach breadth first search",
+      new AbortController().signal,
+      profile,
+    );
+    profile.topics[0].label = "Changed later";
+    assert.deepEqual(body?.learnerProfile, {
+      overall: "recognize",
+      topics: [{ id: "topic-queue", label: "Queues", level: "new" }],
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
