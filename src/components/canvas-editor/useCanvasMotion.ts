@@ -2,8 +2,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CanvasBounds } from '@/lib/canvas-document/source';
 import { settleAxis } from '@/lib/station-canvas/topic-motion';
+import { separateMovingCards } from '@/lib/canvas-presentation/motion';
 
-export function useCanvasMotion(targets: Record<string, CanvasBounds>, reduced: boolean, scene: string, direct: Set<string>) {
+export function useCanvasMotion(targets: Record<string, CanvasBounds>, reduced: boolean, scene: string, direct: Set<string>, anchorId?: string) {
   const bodies = useRef<Record<string, CanvasBounds & { vx: number; vy: number }>>({});
   const [positions, setPositions] = useState<Record<string, CanvasBounds>>(targets);
   const frame = useRef<number | null>(null), previousScene = useRef(scene), last = useRef(0), targetRef = useRef(targets), directRef = useRef(direct);
@@ -31,12 +32,14 @@ export function useCanvasMotion(targets: Record<string, CanvasBounds>, reduced: 
         if (Math.abs(body.x - t.x) + Math.abs(body.y - t.y) > 0.08 || Math.abs(body.vx) + Math.abs(body.vy) > 0.2) moving = true;
         else Object.assign(body, t, { vx: 0, vy: 0 });
       }
+      const safe = separateMovingCards(bodies.current, targetRef.current, directRef.current, anchorId);
+      for (const [id, bounds] of Object.entries(safe)) if (bodies.current[id].y !== bounds.y) { bodies.current[id].y = bounds.y; bodies.current[id].vy = 0; }
       setPositions(Object.fromEntries(Object.entries(bodies.current).map(([id, b]) => [id, { ...b }])));
       frame.current = moving ? requestAnimationFrame(tick) : null;
     };
     frame.current = requestAnimationFrame(tick);
     return () => { if (frame.current !== null) cancelAnimationFrame(frame.current); };
-  }, [targets, reduced, scene, direct]);
+  }, [targets, reduced, scene, direct, anchorId]);
   useEffect(() => () => { if (frame.current !== null) cancelAnimationFrame(frame.current); }, []);
   return positions;
 }

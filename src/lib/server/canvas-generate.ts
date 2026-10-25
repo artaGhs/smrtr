@@ -39,11 +39,11 @@ export async function generateProgressiveCanvas(input: unknown, options: { signa
   publish({ type: "started", mode: request.mode, text: fixture?.text ?? request.text });
   try {
     if (fixture) {
-      await delay(650, signal);
+      await delay(900, signal);
       publish({ type: "outline", outline: fixture.outline });
       // Deliberately complete in a different order from the teaching sequence.
       for (const index of [0, 2, 1]) {
-        await delay(index === 0 ? 800 : 1200, signal);
+        await delay(index === 0 ? 1600 : 2200, signal);
         const unit = fixture.units[index];
         if (!unit) continue;
         if (request.fault === "partial" && index === 1) publish({ type: "unit-failed", conceptId: unit.module.conceptId, error: "Simulated branch failure. The other explanations are kept.", retryable: true });

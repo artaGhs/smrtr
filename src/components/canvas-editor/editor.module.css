@@ -153,7 +153,24 @@
 .topicRing > button svg { flex-shrink: 0; }
 .rootTitle { min-width: 0; overflow-wrap: anywhere; text-align: center; letter-spacing: -1px; }
 .topicRing { padding: 13px 0; box-sizing: border-box; }
-/* Animate only newly mounted card content; React Flow keeps stable measured wrappers. */
-.card { animation: objectReveal 280ms ease-out both; }
-@keyframes objectReveal { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .card { animation: none; } }
+
+
+/* The arrow leads; the measured card unfolds after the connection reaches it. */
+.card { transform-origin: left center; transition: opacity 560ms ease, transform 720ms cubic-bezier(.16,1,.3,1); }
+.card[data-reveal='queued'], .card[data-reveal='connecting'] { opacity: 0; transform: translateX(-18px) scale(.965); pointer-events: none; transition: none; }
+.card[data-reveal='open'] { opacity: 1; transform: translateX(0) scale(1); }
+.connection { pointer-events: auto; }
+.connection[data-related='true'] { opacity: .68; }
+.connectionLabel { fill: #748199; font-size: 11px; font-weight: 400; pointer-events: none; }
+.drawingPath { stroke-dasharray: 1; stroke-dashoffset: 1; animation: drawConnection 820ms cubic-bezier(.45,0,.2,1) forwards; }
+@keyframes drawConnection { to { stroke-dashoffset: 0; } }
+.workspace[data-reveal-paused='true'] .drawingPath { animation-play-state: paused; }
+@media(prefers-reduced-motion: reduce) { .card { transition: none; transform: none; }.drawingPath { animation: none; stroke-dashoffset: 0; } }
+
+/* Chrome floats over an edge-to-edge canvas; Fit alone leaves reading space. */
+.workspace .status { bottom: 20px; left: 80px; max-width: min(360px, calc(100% - 100px)); max-height: 82px; overflow: auto; pointer-events: auto; box-sizing: border-box; padding: 9px 12px; border: 1px solid var(--line); border-radius: 20px; background: #fff; box-shadow: 0 5px 24px #30483c06; color: #7a8595; }
+.workspace[data-editing='true'] .status { bottom: 88px; max-height: 64px; }
+.workspace .status small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.workspace .camera { bottom: 20px; }
+.workspace[data-editing='true'] .camera { bottom: 88px; }
+@media(max-width:700px) { .workspace .status { left: 60px; max-width: calc(100% - 82px); } }

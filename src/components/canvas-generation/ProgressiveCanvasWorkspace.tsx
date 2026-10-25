@@ -23,6 +23,7 @@ export function ProgressiveCanvasWorkspace() {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(false);
+  const [presentationBusy, setPresentationBusy] = useState(false);
   const [paused, setPaused] = useState(false);
   const [hasPending, setHasPending] = useState(false);
   const [status, setStatus] = useState("");
@@ -67,6 +68,7 @@ export function ProgressiveCanvasWorkspace() {
     const message = draft.status === "complete" ? `${prefix}Map ready` : draft.status === "failed" ? "Could not create the map" : draft.status === "partial" ? `${prefix}${ready} explanations ready · some parts unfinished` : draft.status === "stopped" ? `${prefix}Stopped · your draft is kept` : count ? `${prefix}${ready} of ${count} explanations ready` : draft.mode === "chat" ? "Waiting for your connected chat" : `${prefix}Organizing your topic`;
     statusRef.current = message;
     if (!pausedRef.current) setStatus(message);
+    else if (draft.terminal) setStatus("Updates paused · incoming content is kept");
     if (draft.error) setError(draft.error);
     if (draft.terminal) setRunning(false);
   }
@@ -145,18 +147,19 @@ export function ProgressiveCanvasWorkspace() {
       setCopyStatus("Copied. Paste it into your connected coding chat.");
     } catch (cause) { setCopyStatus(cause instanceof Error ? cause.message : "Could not copy the request."); }
   }
+  const displayStatus = !paused && presentationBusy && !running ? "Opening connected ideas" : status;
   const toolbar = <div className={styles.toolbar}>
     <button className={styles.newTopic} onClick={() => setOpen(true)}><Plus size={15} />New topic</button>
-    {status && <span className={styles.status} title={status}>{status}</span>}
-    {(running || paused) && <button onClick={togglePause} aria-label={paused ? "Show incoming map updates" : "Pause incoming map updates"}>{paused ? <Play size={14} /> : <Pause size={14} />}<span>{paused ? hasPending ? "Show updates" : "Resume" : "Pause updates"}</span></button>}
+    {displayStatus && <span className={styles.status} title={displayStatus}>{displayStatus}</span>}
+    {(running || presentationBusy || paused) && <button onClick={togglePause} aria-label={paused ? "Show incoming map updates" : "Pause incoming map updates"}>{paused ? <Play size={14} /> : <Pause size={14} />}<span>{paused ? hasPending ? "Show updates" : "Resume" : "Pause updates"}</span></button>}
     {running && <button onClick={stop}><Square size={12} />Stop</button>}
     {chatId && running && <button onClick={() => setChatPanel((value) => !value)} aria-expanded={chatPanel}>Chat request</button>}
     {error && <button className={styles.errorButton} onClick={() => setChatPanel((value) => !value)} aria-expanded={chatPanel}>View issue</button>}
   </div>;
 
   return <>
-    <EditableCanvas source={source} storageKey="smrtr-editable-canvas-v1" toolbarSlot={toolbar} />
-    <p className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">{status}</p>
+    <EditableCanvas source={source} storageKey="smrtr-editable-canvas-v1" toolbarSlot={toolbar} revealPaused={paused} onRevealBusy={setPresentationBusy} />
+    <p className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">{displayStatus}</p>
     {chatPanel && <aside className={styles.notice} aria-label={error ? "Generation issue" : "Connected chat request"}>
       <button className={styles.closeNotice} onClick={() => setChatPanel(false)} aria-label="Close generation details"><X size={16} /></button>
       {error ? <><strong>Some work could not finish</strong><p>{error}</p><button onClick={() => { setChatPanel(false); setOpen(true); }}>Try a new request <ArrowRight size={14} /></button></> : <><strong>Ready for your connected chat</strong><p>Ask your SMRTR-connected coding chat to open request <code>{chatId}</code> and submit the outline and each teaching unit as it is ready.</p><p>New content will appear here as the chat submits it. This page does not call a chat subscription automatically.</p><button onClick={copyRequest}><Copy size={14} />Copy request and schemas</button><small role="status">{copyStatus}</small></>}

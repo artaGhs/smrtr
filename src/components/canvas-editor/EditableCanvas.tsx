@@ -11,19 +11,26 @@ import { listDocuments, type StoredCanvas } from '@/lib/canvas-document/storage'
 import { useEditorDocument } from './useEditorDocument';
 import { useCanvasMotion } from './useCanvasMotion';
 import { CanvasNode, type FlowNode } from './CanvasNode';
+import { CanvasConnection, type CanvasEdge } from './CanvasConnection';
+import { useCanvasReveal } from './useCanvasReveal';
+import { RevealContext } from './RevealContext';
+import { useCanvasGestures } from './useCanvasGestures';
+import { routeConnections } from '@/lib/canvas-presentation/connections';
+import { fitReadingArea } from '@/lib/canvas-presentation/viewport';
 import styles from './editor.module.css';
 
 type Tool = 'select' | 'hand' | 'idea' | 'text' | 'rectangle' | 'ellipse' | 'pen' | 'connect';
 const nodeTypes = { canvasObject: CanvasNode };
+const edgeTypes = { canvasConnection: CanvasConnection };
 const freshId = (prefix = 'my') => `${prefix}:${crypto.randomUUID()}`;
 const editableTarget = (target: EventTarget | null) => target instanceof HTMLElement && !!target.closest('input, textarea, select, [contenteditable="true"]');
 const scenarioKey = (item: EditorNode) => item.activity?.kind === 'sorting' ? `sort:${item.activity.values.join(',')}` : item.id;
-export type EditableCanvasProps = { source?: CanvasSource; storageKey?: string; toolbarSlot?: ReactNode };
+export type EditableCanvasProps = { source?: CanvasSource; storageKey?: string; toolbarSlot?: ReactNode; revealPaused?: boolean; onRevealBusy?: (busy: boolean) => void };
 
 export function EditableCanvas(props: EditableCanvasProps) {
   return <ReactFlowProvider><Editor {...props} /></ReactFlowProvider>;
 }
-function Editor({ source, storageKey = 'smrtr.editable-canvas.v1', toolbarSlot }: EditableCanvasProps) {
+function Editor({ source, storageKey = 'smrtr.editable-canvas.v1', toolbarSlot, revealPaused = false, onRevealBusy }: EditableCanvasProps) {
   const flow = useReactFlow<FlowNode>();
   const [editing, setEditing] = useState(false);
   const [tool, setTool] = useState<Tool>('select');
@@ -44,17 +51,21 @@ function Editor({ source, storageKey = 'smrtr.editable-canvas.v1', toolbarSlot }
   const [saved, setSaved] = useState<StoredCanvas[] | null>(null);
   const [importError, setImportError] = useState('');
   const fileInput = useRef<HTMLInputElement>(null), area = useRef<HTMLDivElement>(null);
+  useCanvasGestures(area, flow);
   const anchor = useRef<{ id: string; x: number; y: number } | null>(null);
   const gestureStart = useRef<Record<string, CanvasBounds>>({}), draftRef = useRef(draft);
   draftRef.current = draft;
   const graph = useMemo(() => compose(doc.source, doc.overlay), [doc.source, doc.overlay]);
   const expanded = useMemo(() => new Set(doc.view.expanded), [doc.view.expanded]);
   const visible = useMemo(() => visibleNodes(graph.nodes, graph.edges, doc.view.canvasId, expanded), [graph, doc.view.canvasId, expanded]);
+  const progressive = !!source && source.id === doc.source.id;
+  const reveal = useCanvasReveal(visible, graph.edges, `${doc.source.id}:${doc.view.canvasId}`, progressive, revealPaused, reduced, editing);
+  useEffect(() => { onRevealBusy?.(reveal.busy); }, [reveal.busy, onRevealBusy]);
   const visibleIds = useMemo(() => new Set(visible.map(n => n.id)), [visible]);
   const layout = useMemo(() => layoutDocument(visible, graph.edges, doc.overlay, heights, anchor.current ?? doc.view.anchors?.[doc.view.canvasId]), [visible, graph.edges, doc.overlay, heights, doc.view.anchors, doc.view.canvasId]);
   const targets = useMemo(() => ({ ...layout, ...draft }), [layout, draft]);
   const direct = useMemo(() => new Set([...Object.keys(draft), ...Object.keys(doc.overlay.nodes).filter(id => !!doc.overlay.nodes[id].bounds), ...doc.overlay.addedNodes.map(n => n.id)]), [draft, doc.overlay]);
-  const positions = useCanvasMotion(targets, reduced, `${doc.source.id}:${doc.view.canvasId}`, direct);
+  const positions = useCanvasMotion(targets, reduced, `${doc.source.id}:${doc.view.canvasId}`, direct, anchor.current?.id ?? doc.view.anchors?.[doc.view.canvasId]?.id);
   const positionRef = useRef(positions); positionRef.current = positions;
   const item = graph.nodes.find(n => n.id === selected[0]);
   const chosenEdge = graph.edges.find(e => e.id === selectedEdges[0]);
@@ -86,8 +97,10 @@ function Editor({ source, storageKey = 'smrtr.editable-canvas.v1', toolbarSlot }
     const boxes = width < 600 && entry ? [layout[entry.id] ?? defaultBounds(entry)] : Object.values(layout);
     const minX = boxes.length ? Math.min(...boxes.map(b => b.x)) : 0, minY = boxes.length ? Math.min(...boxes.map(b => b.y)) : 0;
     const maxX = boxes.length ? Math.max(...boxes.map(b => b.x + b.width)) : 500, maxY = boxes.length ? Math.max(...boxes.map(b => b.y + b.height)) : 500;
-    const zoom = Math.max(.15, Math.min(.92, (width - 110) / (maxX - minX), (height - 290) / (maxY - minY)));
-    const initial = { x: (width - (maxX - minX) * zoom) / 2 - minX * zoom, y: 145 + (height - 290 - (maxY - minY) * zoom) / 2 - minY * zoom, zoom };
+    const openingBuild = progressive && visible.length === 1;
+    // Reserve the teaching column before any branches arrive; no later camera compensation.
+    const zoom = openingBuild && width >= 900 ? Math.max(.42, Math.min(.78, (height - 240) / 920)) : Math.max(.15, Math.min(.92, (width - 110) / (maxX - minX), (height - 290) / (maxY - minY)));
+    const initial = { x: progressive && width >= 900 && visible.length === 1 ? 72 - minX * zoom : (width - (maxX - minX) * zoom) / 2 - minX * zoom, y: 145 + (height - 290 - (maxY - minY) * zoom) / 2 - minY * zoom, zoom };
     void flow.setViewport(stored ?? initial, { duration: 0 });
   }, [doc.source.id, doc.view.canvasId, editor.ready, doc.source.canvases, doc.view.cameras, flow, layout, visible]);
   useEffect(() => { setSelected(current => current.filter(id => visibleIds.has(id))); setSelectedEdges(current => current.filter(id => graph.edges.some(e => e.id === id))); }, [visibleIds, graph.edges]);
@@ -193,13 +206,25 @@ function Editor({ source, storageKey = 'smrtr.editable-canvas.v1', toolbarSlot }
     const isFixedHeight = ['rectangle', 'ellipse', 'ink', 'group'].includes(n.kind);
     return { id: n.id, type: 'canvasObject', position: { x: b.x, y: b.y }, selected: editing && selected.includes(n.id), draggable: editing && tool === 'select', selectable: editing && (tool === 'select' || tool === 'connect'), zIndex: n.kind === 'group' ? -1 : undefined,
       style: { width: b.width, ...(isFixedHeight ? { height: b.height } : { minHeight: Math.max(80, n.bounds?.height ?? 100) }) }, measured: heights[n.id] ? { width: b.width, height: heights[n.id] } : undefined,
-      data: { item: n, expanded: expanded.has(n.id), explained: doc.view.explained.includes(n.id), children: graph.edges.filter(e => e.source === n.id && e.relation === 'hierarchy').length, edited: !!doc.overlay.nodes[n.id], connectable: editing && (tool === 'select' || tool === 'connect'), hand: !editing || tool === 'hand', active: !busy,
+      data: { item: n, expanded: expanded.has(n.id), explained: doc.view.explained.includes(n.id), children: graph.edges.filter(e => e.source === n.id && e.relation === 'hierarchy').length, edited: !!doc.overlay.nodes[n.id], connectable: editing && (tool === 'select' || tool === 'connect'), hand: !editing || tool === 'hand', active: !busy, revealPhase: reveal.phases[n.id] ?? 'queued',
         frame: doc.view.frames[scenarioKey(n)] ?? (n.canvasId === 'topic-map' ? 0 : -1), onFrame: value => view(v => ({ ...v, frames: { ...v.frames, [scenarioKey(n)]: value } })),
         onFold: () => toggle('expanded', n.id), onExplain: () => toggle('explained', n.id), onEnter: () => { if (n.detailCanvasId) enter(n.detailCanvasId); }, onEdit: () => { if (editing) { setSelected([n.id]); setSelectedEdges([]); setInspector(true); } },
         onResizeStart: startGesture, onResize: bounds => updateDraft(n.id, bounds), onResizeEnd: bounds => finishGesture({ ...draftRef.current, [n.id]: bounds }),
       } };
-  }), [visible, positions, targets, selected, tool, heights, expanded, doc.view.explained, doc.view.frames, doc.overlay.nodes, graph.edges, busy, editing, view, toggle, enter, startGesture, updateDraft, finishGesture]);
-  const edges = useMemo<Edge[]>(() => graph.edges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target)).map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: 'out', targetHandle: 'in', label: e.label, selected: selectedEdges.includes(e.id), reconnectable: editing && (tool === 'select' || tool === 'connect'), selectable: editing, type: 'default', markerEnd: { type: MarkerType.ArrowClosed, width: 13, height: 13, color: '#a7b5b8' }, style: { stroke: selectedEdges.includes(e.id) ? '#52766a' : '#b7c3c7', strokeWidth: selectedEdges.includes(e.id) ? 2.5 : 1.5, strokeDasharray: e.relation === 'hierarchy' ? undefined : '5 4' }, labelStyle: { fill: '#65747d', fontSize: 11 }, labelShowBg: false })), [graph.edges, visibleIds, selectedEdges, tool, editing]);
+  }), [visible, positions, targets, selected, tool, heights, expanded, doc.view.explained, doc.view.frames, doc.overlay.nodes, graph.edges, busy, editing, reveal.phases, progressive, view, toggle, enter, startGesture, updateDraft, finishGesture]);
+  const edges = useMemo<CanvasEdge[]>(() => {
+    const available = graph.edges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
+    const routingBoxes = Object.fromEntries(Object.entries(positions).map(([id, b]) => [id, { ...b, height: heights[id] ?? b.height }]));
+    const routes = routeConnections(available, routingBoxes);
+    return available.filter(e => {
+      const start = reveal.phases[e.source] ?? 'queued', end = reveal.phases[e.target] ?? 'queued';
+      return start === 'open' && (end === 'open' || (e.relation === 'hierarchy' && end === 'connecting')) && routes[e.id];
+    }).map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: routes[e.id].sourceHandle, targetHandle: routes[e.id].targetHandle,
+      data: { route: routes[e.id], drawing: reveal.phases[e.target] === 'connecting', related: e.relation !== 'hierarchy', reduced, labelText: e.label },
+      selected: selectedEdges.includes(e.id), reconnectable: editing && (tool === 'select' || tool === 'connect'), selectable: editing, type: 'canvasConnection',
+      markerEnd: { type: MarkerType.ArrowClosed, width: 12, height: 12, color: '#a9b7ca' },
+    }));
+  }, [graph.edges, visibleIds, positions, heights, reveal.phases, selectedEdges, tool, editing, reduced]);
 
   const penDown = (event: PointerEvent<HTMLDivElement>) => {
     if (inkPointer.current !== null) { inkRef.current = []; setInk([]); return; }
@@ -226,13 +251,16 @@ function Editor({ source, storageKey = 'smrtr.editable-canvas.v1', toolbarSlot }
     const url = URL.createObjectURL(new Blob([serializeDocument(doc)], { type: 'application/json' }));
     const a = window.document.createElement('a'); a.href = url; a.download = `${doc.source.title.replace(/[^a-z0-9-]/gi, '-').slice(0, 60)}.smrtr.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); setMessage('Editable backup downloaded.');
   };
-  const focus = (ids: string[]) => void flow.fitView({ nodes: ids.map(id => ({ id })), padding: 0.3, minZoom: 0.2, maxZoom: 1, duration: reduced ? 0 : 600 });
+  const focus = (ids: string[]) => {
+    const boxes = ids.flatMap(id => positions[id] ? [{ ...positions[id], height: heights[id] ?? positions[id].height }] : []);
+    void flow.setViewport(fitReadingArea(boxes, area.current?.clientWidth ?? 1000, area.current?.clientHeight ?? 800, editing), { duration: reduced ? 0 : 600 });
+  };
   const previewRect = area.current?.getBoundingClientRect();
   const penPath = ink.map((p, i) => { const screen = flow.flowToScreenPosition(p); return `${i ? 'L' : 'M'}${screen.x - (previewRect?.left ?? 0)},${screen.y - (previewRect?.top ?? 0)}`; }).join(' ');
 
-  return <main className={styles.workspace} aria-label="Editable learning canvas">
+  return <main className={styles.workspace} data-reveal-paused={revealPaused} data-editing={editing} aria-label="Editable learning canvas">
     <div className={styles.canvasArea} ref={area}>
-      <ReactFlow<FlowNode> nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodeChanges}
+      <RevealContext.Provider value={reveal.phases}><ReactFlow<FlowNode, CanvasEdge> nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodeChanges}
         onNodeDragStart={startGesture} onNodeDragStop={() => finishGesture()} onSelectionDragStart={startGesture} onSelectionDragStop={() => finishGesture()}
         onConnect={c => connect(c)} onReconnect={(old, c) => connect(c, graph.edges.find(e => e.id === old.id))}
         onNodeClick={(_, n) => { if (!editing) return; if (tool === 'connect') { if (!connectFrom) { setConnectFrom(n.id); setMessage('Now select the second idea.'); } else connect({ source: connectFrom, target: n.id, sourceHandle: null, targetHandle: null }); } else { setSelectedEdges([]); } }}
@@ -241,10 +269,10 @@ function Editor({ source, storageKey = 'smrtr.editable-canvas.v1', toolbarSlot }
         onPaneClick={event => { if (!editing) return; if (['idea', 'text', 'rectangle', 'ellipse'].includes(tool)) create(tool, flow.screenToFlowPosition({ x: event.clientX, y: event.clientY })); else { setSelected([]); setSelectedEdges([]); setInspector(false); setConnectFrom(null); } }}
         onMoveEnd={(_, viewport) => view(v => ({ ...v, cameras: { ...v.cameras, [v.canvasId]: viewport } }))}
         nodesDraggable={editing && tool === 'select'} nodesConnectable={editing && (tool === 'select' || tool === 'connect')} elementsSelectable={editing && (tool === 'select' || tool === 'connect')} nodesFocusable={editing} edgesFocusable={editing}
-        panOnDrag={!editing || tool === 'hand' ? true : [1, 2]} panOnScroll zoomOnScroll={false} zoomOnPinch zoomOnDoubleClick={false} selectionOnDrag={editing && tool === 'select'} selectionKeyCode="Shift" multiSelectionKeyCode={['Meta', 'Control', 'Shift']} deleteKeyCode={null} minZoom={0.15} maxZoom={2} autoPanOnNodeDrag={false} autoPanOnConnect={false} autoPanOnNodeFocus={false} preventScrolling><Background variant={BackgroundVariant.Dots} gap={28} size={1} color="#dce4e5" /></ReactFlow>
+        panOnDrag={!editing || tool === 'hand' ? true : [1, 2]} panOnScroll zoomOnScroll={false} zoomOnPinch zoomOnDoubleClick={false} selectionOnDrag={editing && tool === 'select'} selectionKeyCode="Shift" multiSelectionKeyCode={['Meta', 'Control', 'Shift']} deleteKeyCode={null} minZoom={0.15} maxZoom={2} autoPanOnNodeDrag={false} autoPanOnConnect={false} autoPanOnNodeFocus={false} preventScrolling><Background variant={BackgroundVariant.Dots} gap={28} size={1} color="#dce4e5" /></ReactFlow></RevealContext.Provider>
       {editing && tool === 'pen' && <div className={styles.penSurface} onPointerDown={penDown} onPointerMove={penMove} onPointerUp={e => penEnd(e)} onPointerCancel={e => penEnd(e, true)}><svg><path d={penPath} stroke={strokeColor} strokeWidth={3 * flow.getZoom()} fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg></div>}
     </div>
-    <header className={styles.header}><div className={styles.identity}><a href="/" aria-label="SMRTR home">smrtr↗</a><span>{doc.source.title}<small>{doc.source.provenance === 'curated' ? 'Your learning canvas' : `${doc.source.provenance} · ${doc.source.status}`}</small></span></div><div className={styles.headerTools}><div className={styles.modeSwitch} role="group" aria-label="Canvas mode"><button aria-pressed={!editing} onClick={() => changeMode(false)}>View</button><button aria-pressed={editing} onClick={() => changeMode(true)}>Edit</button></div>{toolbarSlot}<button onClick={() => { void listDocuments(storageKey).then(setSaved).catch(error => setMessage(error.message)); }} aria-label="Open saved canvases"><FolderOpen size={17} /></button><button onClick={download} aria-label="Download editable canvas"><Download size={17} /></button>{editing && <button onClick={() => fileInput.current?.click()} aria-label="Import canvas"><Upload size={17} /></button>}<button onClick={() => focus(visible.map(n => n.id))} aria-label="Fit canvas"><Maximize2 size={17} /></button></div></header>
+    <header className={styles.header}><div className={styles.identity}><a href="/" aria-label="SMRTR home">smrtr↗</a><span>{doc.source.title}<small>{doc.source.provenance === 'curated' ? 'Your learning canvas' : `${doc.source.provenance} · ${reveal.busy ? 'developing' : doc.source.status}`}</small></span></div><div className={styles.headerTools}><div className={styles.modeSwitch} role="group" aria-label="Canvas mode"><button aria-pressed={!editing} onClick={() => changeMode(false)}>View</button><button aria-pressed={editing} onClick={() => changeMode(true)}>Edit</button></div>{toolbarSlot}<button onClick={() => { void listDocuments(storageKey).then(setSaved).catch(error => setMessage(error.message)); }} aria-label="Open saved canvases"><FolderOpen size={17} /></button><button onClick={download} aria-label="Download editable canvas"><Download size={17} /></button>{editing && <button onClick={() => fileInput.current?.click()} aria-label="Import canvas"><Upload size={17} /></button>}<button onClick={() => focus(visible.map(n => n.id))} aria-label="Fit canvas"><Maximize2 size={17} /></button></div></header>
     <nav className={styles.breadcrumbs} aria-label="Canvas navigation">{doc.view.visits.length > 0 && <button onClick={back}><ArrowLeft size={14} />Back</button>}<span>{doc.source.canvases.find(c => c.id === doc.view.canvasId)?.title}</span></nav>
     {editing && <div className={styles.tools} role="toolbar" aria-label="Canvas tools">
       {([{ id: 'select', label: 'Select (V)', Icon: MousePointer2 }, { id: 'hand', label: 'Hand (H)', Icon: Hand }, { id: 'idea', label: 'Add idea (N)', Icon: Plus }, { id: 'text', label: 'Text (T)', Icon: Type }, { id: 'rectangle', label: 'Rounded shape (R)', Icon: Square }, { id: 'ellipse', label: 'Ellipse (O)', Icon: Circle }, { id: 'pen', label: 'Pen (P)', Icon: Pencil }, { id: 'connect', label: 'Connect (C)', Icon: Link2 }] as const).map(({ id, label, Icon }) => <button key={id} aria-label={label} title={label} aria-pressed={tool === id} onClick={() => { setTool(id); setConnectFrom(null); setMessage(id === 'select' ? 'Drag to select. Hold Space to pan.' : id === 'connect' ? 'Select two ideas or drag between their connection handles.' : id === 'hand' ? 'Drag open space to move around.' : id === 'pen' ? 'Draw on the canvas. Choose Select to move a stroke.' : 'Click the canvas to add an object.'); }}><Icon size={18} /></button>)}
@@ -259,11 +287,10 @@ function Editor({ source, storageKey = 'smrtr.editable-canvas.v1', toolbarSlot }
       onEdge={patch => { if (!chosenEdge) return; const candidate = { ...chosenEdge, ...patch }; const error = connectionError(graph.nodes, graph.edges, candidate, chosenEdge.id); if (error) { setMessage(error); return; } change(o => ({ ...o, edges: { ...o.edges, [chosenEdge.id]: { ...o.edges[chosenEdge.id], ...patch } } })); }}
       onChild={() => { if (item) { const b = positions[item.id]; create('idea', { x: b.x + b.width + 120, y: b.y }, item.id); } }} />}
     <div className={styles.camera}><button aria-label="Zoom in" onClick={() => void flow.zoomIn({ duration: reduced ? 0 : 180 })}><Plus size={17} /></button><button aria-label="Zoom out" onClick={() => void flow.zoomOut({ duration: reduced ? 0 : 180 })}><Minus size={17} /></button></div>
-    <div className={styles.status} data-error={editor.saveError}><span>{editor.saveStatus}</span>{editor.saveError && <button onClick={editor.retrySave}>Retry</button>}<small>{message || (!editing ? 'View mode · drag to explore · unfold ideas and play examples' : tool === 'select' ? 'Select an idea · Enter to edit · Space to pan' : tool === 'hand' ? 'Drag to explore' : 'Make it yours')}</small></div>
+    <div className={styles.status} data-error={editor.saveError || !!importError}><span role={importError ? "alert" : undefined}>{importError || editor.saveStatus}</span>{importError ? <button onClick={() => setImportError('')} aria-label="Dismiss import error"><X size={13} /></button> : editor.saveError && <button onClick={editor.retrySave}>Retry</button>}<small>{message || (!editing ? 'View mode · drag to explore · unfold ideas and play examples' : tool === 'select' ? 'Select an idea · Enter to edit · Space to pan' : tool === 'hand' ? 'Drag to explore' : 'Make it yours')}</small></div>
     {doc.conflicts.length > 0 && <details className={styles.conflicts}><summary>{doc.conflicts.length} source update{doc.conflicts.length > 1 ? 's' : ''} to review</summary><ul>{doc.conflicts.map((c, i) => <li key={i}>{c}</li>)}</ul></details>}
     {!editor.ready && <div className={styles.loading}>Opening your canvas…</div>}
     <input ref={fileInput} className={styles.hidden} type="file" accept=".json,application/json" onChange={async event => { const file = event.target.files?.[0]; event.target.value = ''; if (!file) return; try { const imported = parseDocument(await file.text()); const id = `${imported.source.id}:import:${crypto.randomUUID().slice(0, 8)}`; imported.source = { ...imported.source, id }; await editor.open(imported); setMessage('Imported as a separate canvas. Your previous canvas is saved.'); setImportError(''); } catch (error) { setImportError(error instanceof Error ? error.message : 'Import failed.'); } }} />
-    {importError && <div className={styles.error} role="alert">{importError}<button onClick={() => setImportError('')} aria-label="Dismiss import error"><X size={15} /></button></div>}
     {saved && <div className={styles.modalBackdrop}><section className={styles.savedDialog} role="dialog" aria-modal="true" aria-label="Saved canvases"><div><h2>Saved on this device</h2><button onClick={() => setSaved(null)} aria-label="Close saved canvases"><X size={18} /></button></div>{saved.length ? saved.map(record => <button key={record.key} onClick={async () => { try { await editor.open(parseDocument(record.json)); setSaved(null); } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not open canvas.'); } }}><strong>{record.title}</strong><small>{new Date(record.updatedAt).toLocaleString()}</small></button>) : <p>Your saved canvases will appear here.</p>}</section></div>}
     <span className={styles.srOnly} role="status" aria-live="polite">{message}</span>
   </main>;

@@ -39,3 +39,17 @@ Explicit Read and View branch navigation use 600–650 ms cubic easing and direc
 - The full test suite passes 104 tests. TypeScript and the production webpack build pass, including a fresh build after the measurement correction. A fresh final browser session had no console errors or warnings.
 
 The final judgment of feel still belongs to the user. This pass specifically removes unsolicited camera travel and improves continuity; it does not claim usability testing with learners or physical-device performance measurements.
+
+## Arrow-first presentation and overlap correction
+
+The next review identified a different issue: fading an entire committed outline did not feel like a developing map. The presentation now keeps future cards measured but hidden, draws the connection over 820 ms, then opens its destination with a 560 ms opacity and 720 ms local easing transition. A presentation clock sequences the destinations independently of backend events and learner history. The simulated server stages are more widely spaced; receiving the final result does not prematurely label an unfinished visual sequence ready. Pause freezes both the visual queue and the arrow's current stroke offset. Reduced motion shows the available result directly.
+
+Newly unfolded children resolve to a queued state in the render that introduces them. A shared reveal context updates existing React Flow renderers before its internal controlled-node reconciliation. Hiding a queued card is immediate; easing is applied only when opening it. This prevents both the first-unfold flash and a fold/reopen flash. A new generation run does not inherit the previous run's reveal states even if its node IDs match.
+
+Connector descriptions now have allocated, wrapped lanes beside the incoming connection. Cross-links route around unrelated cards; repeated text already shown on a hierarchy connection is not painted twice. Full descriptions remain in the source, accessible edge titles and connection editor. Rounded orthogonal routes replace the crowded automatic Bézier loops. The layout reserves a wider connection column, and actual animated positions are constrained during card growth rather than checking only final destinations.
+
+The canvas paints to every edge of the viewport, without header/footer cutout masks. Explicit Fit leaves reading space around the floating controls, while manual panning and zooming remain unrestricted. Save and import errors share a compact opaque status panel instead of overlapping graph text or creating a full-width footer. Mode changes and disclosures do not move the camera.
+
+Pinch gestures are captured at the canvas boundary before card controls' nopan/nowheel filters can reject them. Trackpad Ctrl-wheel and two-touch gestures share cursor/midpoint-anchored, bounded zoom. Ordinary scrolling and single-touch interactions retain their normal handling. Controller tests cover registration, cancellation, touch cleanup, limits and anchoring; physical trackpad/touch hardware behavior remains a manual review item.
+
+Browser samples cover sequential arrow/card phases, pause/resume with an identical frozen stroke offset, unchanged camera transforms, label/card separation, phone inline growth, connection editing with Undo, and repeated unfolds with zero sampled premature visibility. Screenshots are under `output/playwright/implementation-pass/`.
