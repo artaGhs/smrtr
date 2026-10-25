@@ -12,6 +12,7 @@ import {
   cancelChatRequest,
 } from "../src/lib/server/chat-store";
 import type { Lesson, LearnerProfile } from "../src/lib/contracts";
+import { canvasFixture } from "../src/lib/canvas-generation/fixtures";
 
 const root = process.cwd();
 const tsx = resolve(root, "node_modules/tsx/dist/cli.mjs");
@@ -402,7 +403,7 @@ test(
       const listed = await client.request("tools/list");
       assert.deepEqual(
         listed.result.tools.map((tool: any) => tool.name).sort(),
-        ["get_lesson_request", "list_lesson_requests", "submit_lesson"],
+        ["get_lesson_request", "list_lesson_requests", "submit_canvas_stage", "submit_lesson"],
       );
       assert.ok(
         listed.result.tools.find((tool: any) => tool.name === "submit_lesson")
@@ -841,3 +842,31 @@ test(
     }
   },
 );
+
+test("stdio canvas stages publish an outline before units and complete through the same journal", { timeout: 30000 }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), "smrtr-mcp-canvas-"));
+  const fixture = canvasFixture("photosynthesis");
+  const request = await createChatRequest({ text: fixture.text, canvas: true }, { directory });
+  const client = new ProtocolClient(directory);
+  try {
+    await client.initialize();
+    const exported = data(await client.call("get_lesson_request", { id: request.id }));
+    assert.equal(exported.request.expectedSeq, 1);
+    assert.ok(exported.outlineSchema && exported.unitSchema);
+    let expectedSeq = 1;
+    const submit = async (stage: unknown) => {
+      const result = await client.call("submit_canvas_stage", { id: request.id, revision: request.revision, expectedSeq, stage });
+      assert.notEqual(result.isError, true, JSON.stringify(result));
+      expectedSeq = data(result).expectedSeq;
+    };
+    await submit({ type: "outline", outline: fixture.outline });
+    const early = await getChatRequest(request.id, { directory });
+    assert.equal(early.state, "pending");
+    assert.deepEqual(early.canvasEvents!.map(event => event.type), ["started", "outline"]);
+    for (const unit of fixture.units) await submit({ type: "unit", unit });
+    await submit({ type: "finished", outcome: "complete", missing: [] });
+    const final = await getChatRequest(request.id, { directory });
+    assert.equal(final.state, "completed");
+    assert.equal(final.lesson!.modules.length, 3);
+  } finally { await client.close(); await rm(directory, { recursive: true, force: true }); }
+});
