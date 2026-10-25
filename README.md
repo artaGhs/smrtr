@@ -13,17 +13,19 @@ npm ci
 npm run dev
 ```
 
-Open [localhost:3000](http://localhost:3000). The app starts with a **labeled sample lesson**. The preferred **Use my chat** workflow needs no provider API key.
+Open [localhost:3000](http://localhost:3000). The landing page has a single question box and an attachment button. Enter a topic, attach a PDF, Word document (.docx), or text file, and select **Make it click**. The generated visual lesson opens directly; a preset lesson is never substituted. Up to three files of 10 MB each are supported, with a combined study-input limit of 40,000 characters. Scanned PDFs need selectable text or a pasted transcription.
 
-1. Enter notes or a topic, choose your current confidence, and select **Prepare chat request**. Optional topic rows can override that overall level.
-2. Have a compatible local MCP chat read and complete the request, or copy its instructions into your chat and paste the returned lesson JSON into the website.
-3. The server validates the lesson and computes BFS answer keys. The waiting page loads the result automatically.
+The landing page retains notes on failure or cancellation. **New lesson** returns to the same simple input. Completed lessons are saved in browser storage; `/study` reopens a real generated lesson and otherwise returns to the landing page.
 
-The chat authors the content. The website does not automatically access a chat subscription. This coding session can use the local CLI bridge; it does not need newly attached MCP tools. See [the MCP setup and manual bridge guide](./mcp/README.md) for the exact flow and client configuration.
+### Connect generation when ready
 
-A completed local lesson can be reopened at `http://localhost:3000/?request=LOCAL_REQUEST_ID`. Requests and lesson content are stored in ignored `.smrtr/requests/`; they are not published to GitHub. The app and MCP process must use the same absolute `SMRTR_BRIDGE_DIR` if launched from different working directories. Pending requests expire after 24 hours.
+Copy `.env.example` to `.env.local` and set the server-only `OPENROUTER_API_KEY`. `SMRTR_OPENROUTER_MODEL` defaults to `openai/gpt-4.1`; select a model with strict structured-output support. OpenRouter takes precedence when its key is set. The existing `OPENAI_API_KEY` / `SMRTR_MODEL` connection remains available as a fallback when no OpenRouter key is configured. Restart the development server after changing configuration. No key is requested or stored in the browser.
 
-An optional direct **Provider API** mode uses server-side `OPENAI_API_KEY` from `.env.local` and configurable `SMRTR_MODEL`. Copy `.env.example` only if using that mode. It has been tested with mock provider responses; no live provider key was configured for this milestone.
+The flow is tested with simulated provider responses. Live generation stays unavailable until a key is configured; it returns a clear message and keeps the visitor’s material in place.
+
+### Existing chat integration
+
+Existing `/?request=...` lesson links redirect to `/study?request=...`. A compatible local MCP chat can still fulfill these requests. See [the MCP setup and manual bridge guide](./mcp/README.md) for that optional workflow. The website does not automatically access a chat subscription. Requests are stored in ignored `.smrtr/requests/`; pending requests expire after 24 hours.
 
 If the default npm cache has a permissions problem:
 

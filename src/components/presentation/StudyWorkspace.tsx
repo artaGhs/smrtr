@@ -9,12 +9,14 @@ import { ConceptMap } from "./ConceptMap";
 import { LearningDetail, type DetailView } from "./LearningDetail";
 import { NotesComposer } from "./NotesComposer";
 import { HierarchyLesson } from "./HierarchyLesson";
+import { GenerationExperience } from "@/components/generation/GenerationExperience";
+import { closeLoader } from "@/lib/session/reveal-lesson";
 
-export function StudyWorkspace(props: StudyWorkspaceProps) {
+export function StudyWorkspace(props: StudyWorkspaceProps & { onNewLesson?: () => void }) {
   return <CanvasWorkspace {...props} />;
 }
 
-function CanvasWorkspace(session: StudyWorkspaceProps) {
+function CanvasWorkspace(session: StudyWorkspaceProps & { onNewLesson?: () => void }) {
   const { lesson } = session;
   const [composerOpen, setComposerOpen] = useState(lesson.mode === "sample" && session.status !== "generating");
   const [detailView, setDetailView] = useState<DetailView | null>(null);
@@ -89,11 +91,11 @@ function CanvasWorkspace(session: StudyWorkspaceProps) {
       {canvasMode === "lesson" && session.learning ? <HierarchyLesson session={session} learning={session.learning} onOpenConcept={(id) => selectConcept(id)} onOpenSources={() => openDetail("sources")} onOpenPractice={() => openDetail("practice")} /> : canvasMode === "lesson" ? <LearningCanvas key={`${lesson.id}:${lesson.revision}`} lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id, false)} onOpenConcept={(id) => selectConcept(id)} activeSceneIndex={activeSceneIndex} onSceneChange={(index) => goToStep(index)} /> : <ConceptMap lesson={lesson} selectedConceptId={concept.id} onSelectConcept={(id) => selectConcept(id)} practiced={practiced} needsReview={needsReview} overviewVersion={overviewVersion} />}
     </section>
     <header className="canvas-header">
-      <div className="canvas-identity"><button className="canvas-wordmark" onClick={() => setComposerOpen(true)} aria-label="SMRTR — open topic or notes">smrtr<span>↗</span></button><span className="header-divider" /><div className="canvas-document"><span className="canvas-document-title">{lesson.title}</span><span className="lesson-origin">{badge}</span></div></div>
+      <div className="canvas-identity"><button className="canvas-wordmark" onClick={() => session.onNewLesson ? session.onNewLesson() : setComposerOpen(true)} aria-label="SMRTR — open topic or notes">smrtr<span>↗</span></button><span className="header-divider" /><div className="canvas-document"><span className="canvas-document-title">{lesson.title}</span><span className="lesson-origin">{badge}</span></div></div>
       <nav className="canvas-actions" aria-label="Workspace tools">
         {waiting && <button className="request-chip" onClick={() => setComposerOpen(true)}><LoaderCircle className="spin" size={13} /><span>{session.generationMode === "chat" ? "Awaiting chat" : "Generating"}</span></button>}
         {!waiting && session.error && <button className="request-chip request-error" onClick={() => setComposerOpen(true)}><MessageSquare size={13} /><span>Request needs attention</span></button>}
-        <button className="toolbar-button" onClick={() => openDetail("sources")} aria-label="Open source passages" title="Sources"><FileText size={15} /><span>Sources</span></button><button className="toolbar-button" onClick={() => openDetail("practice")} aria-label="Open final practice" title="Practice"><Layers size={15} /><span>Practice</span></button><button className="new-lesson-button" onClick={() => setComposerOpen(true)}><Plus size={15} /><span>New lesson</span></button>
+        <button className="toolbar-button" onClick={() => openDetail("sources")} aria-label="Open source passages" title="Sources"><FileText size={15} /><span>Sources</span></button><button className="toolbar-button" onClick={() => openDetail("practice")} aria-label="Open final practice" title="Practice"><Layers size={15} /><span>Practice</span></button><button className="new-lesson-button" onClick={() => session.onNewLesson ? session.onNewLesson() : setComposerOpen(true)}><Plus size={15} /><span>New lesson</span></button>
       </nav>
     </header>
     <div className="canvas-view-switch" role="group" aria-label="Canvas view"><button className={canvasMode === "lesson" ? "active" : ""} aria-pressed={canvasMode === "lesson"} onClick={() => setCanvasMode("lesson")}><Shapes size={14} />Visual lesson</button><button className={canvasMode === "map" ? "active" : ""} aria-pressed={canvasMode === "map"} onClick={() => { setCanvasMode("map"); setOverviewVersion((value) => value + 1); }}><MapIcon size={14} />Connections</button></div>
@@ -107,7 +109,8 @@ function CanvasWorkspace(session: StudyWorkspaceProps) {
       <button className="sequence-arrow sequence-next" onClick={() => activeSceneIndex < sequence.length - 1 ? goToStep(activeSceneIndex + 1) : openDetail("practice")} aria-label={activeSceneIndex < sequence.length - 1 ? "Next scene" : "Start final practice"}><ArrowRight size={16} /></button>
     </footer>}
     {detailView && <aside className="detail-drawer" aria-label="Learning detail" tabIndex={-1} ref={drawerRef}><div className="drawer-header"><nav aria-label="Learning views">{([['learn', 'Learn'], ['sources', 'Sources'], ['practice', 'Practice']] as const).map(([id, label]) => <button key={id} className={detailView === id ? "active" : ""} onClick={() => setDetailView(id)} aria-pressed={detailView === id}>{label}</button>)}</nav><button className="icon-button" onClick={closeDetail} aria-label="Close learning detail"><X size={17} /></button></div><div className="drawer-scroll"><LearningDetail session={session} concept={concept} view={detailView} onSelectConcept={(id) => selectConcept(id)} onShowView={setDetailView} /></div></aside>}
-    {composerOpen && <CanvasDialog onClose={() => setComposerOpen(false)}><NotesComposer session={session} onExploreSample={() => {session.onLoadSample();setComposerOpen(false);}} /></CanvasDialog>}
+    {waiting && session.generationMode === "provider" && <GenerationExperience input={session.input} preview={session.generationPreview} lesson={session.generationLesson} onCancel={() => void closeLoader(session.onCancel)} />}
+    {composerOpen && !(waiting && session.generationMode === "provider") && <CanvasDialog onClose={() => setComposerOpen(false)}><NotesComposer session={session} onExploreSample={() => {session.onLoadSample();setComposerOpen(false);}} /></CanvasDialog>}
   </main>;
 }
 

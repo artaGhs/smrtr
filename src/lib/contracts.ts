@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GenerationPreviewSchema } from "./session/generation-preview";
 
 export const SourceRecordSchema = z.object({
   id: z.string(),
@@ -201,6 +202,7 @@ export const GenerationResponseSchema = z.object({
   lesson: LessonSchema,
 });
 export const GenerationEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("preview"), requestId: z.string(), preview: GenerationPreviewSchema }),
   z.object({
     type: z.literal("plan"),
     requestId: z.string(),
@@ -287,6 +289,8 @@ export type StudyWorkspaceProps = {
   onGenerate: () => void;
   onCancel: () => void;
   status: GenerationStatus;
+  generationPreview?: z.infer<typeof GenerationPreviewSchema> | null;
+  generationLesson?: Lesson | null;
   error: string | null;
   attempts: Attempt[];
   onAnswer: (

@@ -15,6 +15,8 @@ import {
 import { getTeachingSequence } from "../teaching/sequence";
 import { sampleLesson, SAMPLE_INPUT } from "../fixtures/sample-lesson";
 import { generateLesson } from "./generate-lesson";
+import { revealLesson } from "./reveal-lesson";
+import type { GenerationPreview } from "./generation-preview";
 import { useLearningNavigation } from "../learning/use-learning-navigation";
 import { RequestGate } from "./request-gate";
 import { readSession, saveSession } from "./storage";
@@ -27,24 +29,27 @@ import {
   waitForChatLesson,
 } from "./chat-bridge";
 
-export function useStudySession(): StudyWorkspaceProps {
+export function useStudySession(initial?: { lesson: Lesson; input: string }): StudyWorkspaceProps {
+  const startingLesson = initial?.lesson ?? sampleLesson;
   const [learnerProfile, setLearnerProfile] = useState<LearnerProfile>(
-    DEFAULT_LEARNER_PROFILE,
+    startingLesson.learnerProfile ?? DEFAULT_LEARNER_PROFILE,
   );
-  const [lesson, setLesson] = useState(sampleLesson);
+  const [lesson, setLesson] = useState(startingLesson);
   const learning = useLearningNavigation(lesson);
   const [selectedConceptId, onSelectConcept] = useState(
-    getTeachingSequence(sampleLesson)[0].conceptId,
+    getTeachingSequence(startingLesson)[0].conceptId,
   );
-  const [input, setInput] = useState("");
-  const [status, setStatus] = useState<GenerationStatus>("idle");
+  const [input, setInput] = useState(initial?.input ?? "");
+  const [status, setStatus] = useState<GenerationStatus>(initial ? "ready" : "idle");
+  const [generationPreview, setGenerationPreview] = useState<GenerationPreview | null>(null);
+  const [generationLesson, setGenerationLesson] = useState<Lesson | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [generationMode, setGenerationMode] = useState<GenerationMode>("chat");
+  const [generationMode, setGenerationMode] = useState<GenerationMode>(initial ? "provider" : "chat");
   const [chatRequest, setChatRequest] = useState<ChatRequest | null>(null);
   const [restored, setRestored] = useState(false);
   const gate = useRef(new RequestGate());
-  const lastCompleteLesson = useRef<Lesson>(sampleLesson);
+  const lastCompleteLesson = useRef<Lesson>(startingLesson);
   const pendingChat = useRef<string | null>(null);
   const restoreCompleted = useCallback(() => {
     setLesson(lastCompleteLesson.current);
@@ -57,6 +62,8 @@ export function useStudySession(): StudyWorkspaceProps {
   }, []);
   const onCancel = useCallback(() => {
     gate.current.cancel();
+    setGenerationPreview(null);
+    setGenerationLesson(null);
     if (pendingChat.current)
       void cancelChatRequest(pendingChat.current).catch(() => undefined);
     pendingChat.current = null;
@@ -119,6 +126,11 @@ export function useStudySession(): StudyWorkspaceProps {
     }
   }
   useEffect(() => {
+    // A lesson just created on the landing page takes precedence over any old sample.
+    if (initial) {
+      setRestored(true);
+      return () => gate.current.cancel();
+    }
     let saved = null;
     try {
       saved = readSession(localStorage);
@@ -204,17 +216,24 @@ export function useStudySession(): StudyWorkspaceProps {
         (partial) => {
           if (!gate.current.isCurrent(requestId)) return;
           setLesson(partial);
+          setGenerationLesson(partial);
           if (!planShown) {
             onSelectConcept(getTeachingSequence(partial)[0].conceptId);
             planShown = true;
           }
         },
+        fetch,
+        (preview) => { if (gate.current.isCurrent(requestId)) setGenerationPreview(preview); },
       );
       if (!gate.current.isCurrent(requestId)) return;
-      lastCompleteLesson.current = { ...result, origin: "provider" };
-      setLesson(lastCompleteLesson.current);
-      if (!planShown) onSelectConcept(getTeachingSequence(result)[0].conceptId);
-      setStatus("ready");
+      const complete: Lesson = { ...result, origin: "provider" };
+      lastCompleteLesson.current = complete;
+      await revealLesson(() => {
+        if (!gate.current.isCurrent(requestId)) return;
+        setLesson(complete);
+        if (!planShown) onSelectConcept(getTeachingSequence(result)[0].conceptId);
+        setStatus("ready");
+      });
       gate.current.finish(requestId);
     } catch (cause) {
       if (!gate.current.isCurrent(requestId) || signal.aborted) return;
@@ -260,6 +279,8 @@ export function useStudySession(): StudyWorkspaceProps {
     onGenerate,
     onCancel,
     status,
+    generationPreview,
+    generationLesson,
     error,
     attempts,
     onAnswer,

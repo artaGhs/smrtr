@@ -4,7 +4,7 @@ import { CanvasOutlineSchema, CanvasRunRequestSchema, CanvasUnitSchema, type Can
 import { canvasFixture } from "../canvas-generation/fixtures";
 import { createDraft, reduceEvent } from "../canvas-generation/state";
 import { validateOutline, validateUnit } from "../canvas-generation/validation";
-import { createOpenAIProvider, type LessonProvider } from "./provider";
+import { createConfiguredProvider, type LessonProvider } from "./provider";
 import { providerJsonSchema } from "./schemas";
 import { GenerationError, publicError } from "./errors";
 import { createBfsQuestions } from "./bfs-questions";
@@ -50,7 +50,7 @@ export async function generateProgressiveCanvas(input: unknown, options: { signa
         else publish({ type: "unit", unit });
       }
     } else {
-      const provider = options.provider ?? createOpenAIProvider();
+      const provider = options.provider ?? createConfiguredProvider();
       async function stage<T>(schema: z.ZodType<T>, name: string, task: string, tokens: number, validate: (raw: T) => T): Promise<T> {
         let repairs = 0, transient = 0, correction = "";
         for (;;) {

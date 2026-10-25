@@ -1,14 +1,16 @@
+import { generatePreview } from "./generation-preview";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { GenerationRequestSchema, GenerationResponseSchema, type GenerationEvent, type Lesson, type Question } from "../contracts";
 import { createBfsQuestions } from "./bfs-questions";
 import { GenerationError } from "./errors";
-import { createOpenAIProvider, type LessonProvider } from "./provider";
+import { createConfiguredProvider, type LessonProvider } from "./provider";
 import { ModuleResultSchema, PlanResultSchema, SOURCE_ID, SYSTEM_INSTRUCTIONS, providerJsonSchema } from "./schemas";
 import { LessonValidationError, validateLesson } from "./validation";
 import { CONFIDENCE_GUIDANCE, conceptLearnerContext, normalizeLearnerProfile } from "./learner-profile";
 
 type Options = {
+  preview?: boolean;
   provider?: LessonProvider;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -32,6 +34,7 @@ export async function generateLesson(input: unknown, options: Options = {}) {
   if (originalText.length > 40_000) throw new GenerationError("INVALID_INPUT", "Study input must be at most 40,000 characters.", 400);
   if (!/[\p{L}\p{N}]/u.test(notes)) throw new GenerationError("INSUFFICIENT_INPUT", "Add a recognizable study topic or notes to build a useful lesson.", 422);
   const controller = new AbortController();
+  const previewController = new AbortController();
   let timedOut = false;
   const abort = () => controller.abort();
   if (options.signal?.aborted) abort();
@@ -39,13 +42,19 @@ export async function generateLesson(input: unknown, options: Options = {}) {
   const timer = setTimeout(() => { timedOut = true; abort(); }, options.timeoutMs ?? configuredTimeout());
   try {
     if (controller.signal.aborted) throw new GenerationError("REQUEST_ABORTED", "Generation was canceled.", 499);
-    const provider = options.provider ?? createOpenAIProvider();
+    const provider = options.provider ?? createConfiguredProvider();
     const base = {
       id: `lesson-${randomUUID()}`, revision: randomUUID(), mode: "generated" as const,
       learnerProfile,
       sources: [{ id: SOURCE_ID, title: "Your submitted notes or topic", text: originalText }],
     };
     const publish = (event: GenerationEvent) => { if (!controller.signal.aborted) options.onEvent?.(event); };
+    if (options.preview && options.onEvent) {
+      const previewSignal = AbortSignal.any([controller.signal, previewController.signal, AbortSignal.timeout(12_000)]);
+      void generatePreview(provider, notes, previewSignal).then((preview) => {
+        if (preview && !previewSignal.aborted) publish({ type: "preview", requestId, preview });
+      });
+    }
     async function stage<T>(schema: z.ZodType<T>, schemaName: string, prompt: string, maxOutputTokens: number, validate: (value: T) => void, context: Record<string, unknown> = {}): Promise<T> {
       let repair: string[] = [];
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -84,6 +93,7 @@ export async function generateLesson(input: unknown, options: Options = {}) {
     });
     if (result.status === "insufficient" || !result.plan) throw new GenerationError("INSUFFICIENT_INPUT", "The input did not identify enough study material. Add a concrete educational topic or a paragraph of notes.", 422);
     const plan = validateLesson({ ...base, ...result.plan, modules: [], finalQuestions: [] }, originalText, true);
+    previewController.abort();
     publish({ type: "plan", requestId, lesson: plan });
     const teachingSequence = result.plan.teachingPlan.sequence;
     const teachingOrder = teachingSequence.map((step) => step.conceptId);
@@ -135,6 +145,7 @@ export async function generateLesson(input: unknown, options: Options = {}) {
     if (options.signal?.aborted) throw new GenerationError("REQUEST_ABORTED", "Generation was canceled.", 499);
     throw error;
   } finally {
+    previewController.abort();
     clearTimeout(timer);
     options.signal?.removeEventListener("abort", abort);
   }

@@ -1,3 +1,4 @@
+import type { GenerationPreview } from "./generation-preview";
 import {
   GenerationEventSchema,
   GenerationResponseSchema,
@@ -11,11 +12,13 @@ export async function generateLesson(
   signal: AbortSignal,
   onProgress: (lesson: Lesson) => void,
   fetcher: typeof fetch = fetch,
+  onPreview?: (preview: GenerationPreview) => void,
 ): Promise<Lesson> {
   const response = await fetcher("/api/generate", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(onPreview ? { "x-smrtr-preview": "1" } : {}),
       Accept: "application/x-ndjson, application/json",
     },
     body: JSON.stringify(request),
@@ -49,6 +52,7 @@ export async function generateLesson(
     const event = GenerationEventSchema.parse(JSON.parse(line));
     if (event.requestId !== request.requestId)
       throw new Error("Generation response did not match this request.");
+    if (event.type === "preview" && !current) onPreview?.(event.preview);
     if (event.type === "error") throw new Error(event.error);
     if (event.type === "plan") {
       current = event.lesson;

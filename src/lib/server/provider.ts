@@ -1,4 +1,5 @@
 import { GenerationError } from "./errors";
+import { createOpenRouterProvider } from "./openrouter-provider";
 
 export type ProviderRequest = {
   schemaName: string;
@@ -77,4 +78,11 @@ export function createOpenAIProvider(options: {
       catch { throw new GenerationError("PROVIDER_INVALID_OUTPUT", "The provider returned invalid lesson JSON. Please try again."); }
     },
   };
+}
+
+/** OpenRouter is the default connection when its server key is provided. */
+export function createConfiguredProvider(): LessonProvider {
+  if (process.env.OPENROUTER_API_KEY?.trim()) return createOpenRouterProvider();
+  if (process.env.OPENAI_API_KEY?.trim()) return createOpenAIProvider();
+  throw new GenerationError("PROVIDER_NOT_CONFIGURED", "Lesson creation is not connected yet. Configure the server-side OPENROUTER_API_KEY when ready.", 503);
 }

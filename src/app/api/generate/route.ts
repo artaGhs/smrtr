@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         const emit = (event: GenerationEvent) => { if (!signal.aborted) controller.enqueue(encoder.encode(JSON.stringify(event) + "\n")); };
-        try { await generateLesson(input, { signal, onEvent: emit }); }
+        try { await generateLesson(input, { signal, onEvent: emit, preview: request.headers.get("x-smrtr-preview") === "1" }); }
         catch (error) { emit({ type: "error", requestId, error: publicError(error).message }); }
         finally { if (!signal.aborted) controller.close(); }
       },

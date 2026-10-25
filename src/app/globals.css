@@ -383,3 +383,15 @@ a.source-locator { color: var(--accent); text-decoration: underline; text-underl
 .concept-connections > button > .connection-description { width: auto; flex: 1; }
 .connection-description > strong { display: block; }
 .connection-description > .connection-meaning { display: block; font-size: 9px; line-height: 1.8; color: #95a4bd; margin-top: 5px; }
+
+/* Loader exits (reveal-lesson.ts). Reveal: the research field rushes past while the lesson opens from its centre. */
+html[data-loader-exit="reveal"]::view-transition-old(root) { animation: lesson-leave 1s cubic-bezier(.42, 0, 1, 1) both; }
+html[data-loader-exit="reveal"]::view-transition-new(root) { animation: lesson-portal 1.15s .12s cubic-bezier(.65, 0, .35, 1) both, lesson-land 1.5s .12s cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes lesson-leave { to { transform: scale(2.6); filter: blur(16px); opacity: 0; } }
+@keyframes lesson-portal { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(75% at 50% 50%); } }
+@keyframes lesson-land { from { transform: scale(1.16); filter: blur(10px); } }
+/* Close: the field recedes and the page underneath settles back in. */
+html[data-loader-exit="close"]::view-transition-old(root) { animation: loader-recede .55s cubic-bezier(.4, 0, 1, 1) both; }
+html[data-loader-exit="close"]::view-transition-new(root) { animation: loader-return .8s .08s cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes loader-recede { to { transform: scale(.9); filter: blur(10px); opacity: 0; } }
+@keyframes loader-return { from { transform: scale(1.03); opacity: 0; } }

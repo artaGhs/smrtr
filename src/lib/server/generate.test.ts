@@ -339,3 +339,35 @@ test("designed lessons require explanatory relation meaning while legacy lessons
   assert.doesNotThrow(() => validateLesson(legacy, legacy.sources[0].text));
   assert.doesNotThrow(() => validateLesson(lesson, lesson.sources[0].text));
 });
+
+test("optional preview publishes early without holding up the plan", async () => {
+  const events: GenerationEvent[] = [];
+  const base = providerFor("Photosynthesis");
+  const provider: LessonProvider = { async generate(request) {
+    if (request.schemaName === "study_preview") return { topic: "Photosynthesis", terms: [
+      { label: "Light", detail: "Energy from the sun." },
+      { label: "Chlorophyll", detail: "A pigment that absorbs light." },
+      { label: "Glucose", detail: "Sugar made by photosynthesis." },
+    ] };
+    if (request.schemaName === "study_plan") await new Promise((resolve) => setTimeout(resolve, 10));
+    return base.generate(request);
+  } };
+  await generateLesson({ requestId: "preview", text: "Explain photosynthesis" }, { provider, preview: true, onEvent: (event) => events.push(event) });
+  assert.deepEqual(events.map((event) => event.type), ["preview", "plan", "module", "module", "complete"]);
+});
+
+test("a slow preview is canceled when the plan arrives and never delays completion", async () => {
+  let previewSignal: AbortSignal | undefined;
+  const events: GenerationEvent[] = [];
+  const base = providerFor("Photosynthesis");
+  const provider: LessonProvider = { async generate(request) {
+    if (request.schemaName === "study_preview") {
+      previewSignal = request.signal;
+      return new Promise((_, reject) => request.signal.addEventListener("abort", () => reject(new Error("Canceled")), { once: true }));
+    }
+    return base.generate(request);
+  } };
+  await generateLesson({ requestId: "slow-preview", text: "Explain photosynthesis" }, { provider, preview: true, onEvent: (event) => events.push(event) });
+  assert.equal(previewSignal?.aborted, true);
+  assert.deepEqual(events.map((event) => event.type), ["plan", "module", "module", "complete"]);
+});
