@@ -17,9 +17,11 @@
     "@modelcontextprotocol/server": "^2.4.0",
     "@xyflow/react": "^12.10.0",
     "lucide-react": "^0.577.0",
+    "mammoth": "^1.13.0",
     "next": "^16.4.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "unpdf": "^1.9.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -220,3 +220,20 @@ test("an unfinished manual confidence edit cannot make the completed lesson unre
   assert.equal(readSession(storage)?.lesson.id, sampleLesson.id);
   assert.equal(readSession(storage)?.learnerProfile, undefined);
 });
+
+test("preview events arrive before the plan and stale previews never replace it", async () => {
+  const preview = { topic: "Graphs", terms: [
+    { label: "Nodes", detail: "The points in a graph." },
+    { label: "Edges", detail: "Connections between nodes." },
+    { label: "Queue", detail: "The first-in, first-out frontier." },
+  ] };
+  const received: string[] = [];
+  const result = await generateLesson(request, signal(), () => received.push("plan"), ndjsonFetch([
+    { type: "preview", requestId: request.requestId, preview },
+    { type: "plan", requestId: request.requestId, lesson: { ...sampleLesson, modules: [] } },
+    { type: "preview", requestId: request.requestId, preview },
+    { type: "complete", requestId: request.requestId, lesson: sampleLesson },
+  ]), (value) => received.push(value.topic));
+  assert.deepEqual(received, ["Graphs", "plan"]);
+  assert.equal(result.id, sampleLesson.id);
+});
