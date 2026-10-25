@@ -48,7 +48,7 @@ Newly unfolded children resolve to a queued state in the render that introduces 
 
 Connector descriptions now have allocated, wrapped lanes beside the incoming connection. Cross-links route around unrelated cards; repeated text already shown on a hierarchy connection is not painted twice. Full descriptions remain in the source, accessible edge titles and connection editor. Rounded orthogonal routes replace the crowded automatic Bézier loops. The layout reserves a wider connection column, and actual animated positions are constrained during card growth rather than checking only final destinations.
 
-The graph's paint area excludes the header and a reserved footer for save/error messages. Explicit Fit uses those reading-area bounds. Import errors share the status area instead of stacking another banner over the graph. These shell bounds do not move the camera on mode changes or disclosures.
+The canvas paints to every edge of the viewport, without header/footer cutout masks. Explicit Fit leaves reading space around the floating controls, while manual panning and zooming remain unrestricted. Save and import errors share a compact opaque status panel instead of overlapping graph text or creating a full-width footer. Mode changes and disclosures do not move the camera.
 
 Pinch gestures are captured at the canvas boundary before card controls' nopan/nowheel filters can reject them. Trackpad Ctrl-wheel and two-touch gestures share cursor/midpoint-anchored, bounded zoom. Ordinary scrolling and single-touch interactions retain their normal handling. Controller tests cover registration, cancellation, touch cleanup, limits and anchoring; physical trackpad/touch hardware behavior remains a manual review item.
 

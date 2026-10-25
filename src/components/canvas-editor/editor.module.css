@@ -167,12 +167,10 @@
 .workspace[data-reveal-paused='true'] .drawingPath { animation-play-state: paused; }
 @media(prefers-reduced-motion: reduce) { .card { transition: none; transform: none; }.drawingPath { animation: none; stroke-dashoffset: 0; } }
 
-/* The graph cannot paint behind the shell or its save/error messages. */
-.canvasArea { clip-path: inset(112px 0 104px); }
-.workspace[data-editing='true'] .canvasArea { clip-path: inset(144px 0 156px); }
-.workspace .status { bottom: 20px; left: 80px; max-width: min(360px, calc(100% - 100px)); max-height: 82px; overflow: auto; pointer-events: auto; }
+/* Chrome floats over an edge-to-edge canvas; Fit alone leaves reading space. */
+.workspace .status { bottom: 20px; left: 80px; max-width: min(360px, calc(100% - 100px)); max-height: 82px; overflow: auto; pointer-events: auto; box-sizing: border-box; padding: 9px 12px; border: 1px solid var(--line); border-radius: 20px; background: #fff; box-shadow: 0 5px 24px #30483c06; color: #7a8595; }
 .workspace[data-editing='true'] .status { bottom: 88px; max-height: 64px; }
 .workspace .status small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .workspace .camera { bottom: 20px; }
 .workspace[data-editing='true'] .camera { bottom: 88px; }
-@media(max-width:700px) { .canvasArea { clip-path: inset(148px 0 104px); }.workspace[data-editing='true'] .canvasArea { clip-path: inset(165px 0 156px); }.workspace .status { left: 60px; max-width: calc(100% - 82px); } }
+@media(max-width:700px) { .workspace .status { left: 60px; max-width: calc(100% - 82px); } }
