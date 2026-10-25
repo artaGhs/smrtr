@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from '@xyflow/react';
 import { ArrowRight, Minus, Plus, Play, Pause, RotateCcw } from 'lucide-react';
 import { buildBubbleTrace, createSortItems, getFrameForMode } from '@/lib/station-canvas/model';
@@ -9,12 +9,13 @@ import { ActivityView } from '@/components/activities/ActivityView';
 import type { EditorNode } from '@/lib/canvas-document/model';
 import type { CanvasBounds } from '@/lib/canvas-document/source';
 import styles from './editor.module.css';
+import { RevealContext } from './RevealContext';
 
 export type CanvasNodeData = Record<string, unknown> & {
   item: EditorNode; expanded: boolean; explained: boolean; children: number; edited: boolean;
   frame: number; onFrame: (frame: number) => void; onFold: () => void; onExplain: () => void; onEnter: () => void; onEdit: () => void;
   onResizeStart: () => void; onResize: (bounds: CanvasBounds) => void; onResizeEnd: (bounds: CanvasBounds) => void;
-  connectable: boolean; hand: boolean; active: boolean;
+  connectable: boolean; hand: boolean; active: boolean; revealPhase: 'queued' | 'connecting' | 'open';
 };
 export type FlowNode = Node<CanvasNodeData, 'canvasObject'>;
 
@@ -48,16 +49,18 @@ function Simulation({ item, frame, onFrame, active }: Pick<CanvasNodeData, 'item
 }
 export function CanvasNode({ data, selected }: NodeProps<FlowNode>) {
   const n = data.item;
+  const reveal = useContext(RevealContext);
+  const phase = reveal ? reveal[n.id] ?? 'queued' : data.revealPhase;
   const ink = n.kind === 'ink', group = n.kind === 'group', bare = n.kind === 'text';
   const points = n.points ?? [];
   const pointWidth = Math.max(1, ...points.map(p => p.x)), pointHeight = Math.max(1, ...points.map(p => p.y));
-  return <article data-editor-node={n.id} className={`${styles.card} ${styles[n.kind]} ${n.role === 'topic' ? styles.topic : n.role === 'branch' ? styles.branch : ''} ${selected ? styles.selected : ''}`} style={{ background: ink || bare || group ? undefined : n.style?.fill, color: n.style?.color, borderColor: n.style?.stroke }} aria-label={`${n.title || n.kind} canvas object`}>
+  return <article data-editor-node={n.id} data-reveal={phase} aria-hidden={phase !== 'open'} inert={phase !== 'open'} className={`${styles.card} ${styles[n.kind]} ${n.role === 'topic' ? styles.topic : n.role === 'branch' ? styles.branch : ''} ${selected ? styles.selected : ''}`} style={{ background: ink || bare || group ? undefined : n.style?.fill, color: n.style?.color, borderColor: n.style?.stroke }} aria-label={`${n.title || n.kind} canvas object`}>
     <NodeResizer isVisible={selected && !data.hand} minWidth={n.kind === 'simulation' ? 350 : 80} minHeight={ink ? 20 : 60} onResizeStart={data.onResizeStart} onResize={(_, p) => data.onResize({ x: p.x, y: p.y, width: p.width, height: p.height })} onResizeEnd={(_, p) => data.onResizeEnd({ x: p.x, y: p.y, width: p.width, height: p.height })} />
-    {!ink && !group && <><Handle id="in" type="target" position={Position.Left} isConnectable={data.connectable} className={styles.handle} /><Handle id="out" type="source" position={Position.Right} isConnectable={data.connectable} className={styles.handle} /></>}
+    {!ink && !group && <><Handle id="in" type="target" position={Position.Left} isConnectable={data.connectable} className={styles.handle} /><Handle id="out" type="source" position={Position.Right} isConnectable={data.connectable} className={styles.handle} /><Handle id="out-bottom" type="source" position={Position.Bottom} isConnectable={data.connectable} className={styles.handle} /><Handle id="in-top" type="target" position={Position.Top} isConnectable={data.connectable} className={styles.handle} /></>}
     {ink ? <svg className={styles.inkSvg} viewBox={`-4 -4 ${pointWidth + 8} ${pointHeight + 8}`} preserveAspectRatio="none"><path d={points.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ')} fill="none" stroke={n.style?.stroke ?? '#52677b'} strokeWidth={n.style?.strokeWidth ?? 3} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" /></svg> : n.role === 'topic' ? <>
       <div className={styles.topicRing}><span>{n.eyebrow ?? 'Start here'}</span><button className="nodrag nopan" onClick={data.onExplain} aria-expanded={data.explained} aria-label={`Explain ${n.title}`}><span className={styles.rootTitle} style={{ fontSize: n.title.length > 20 ? 24 : n.title.length > 12 ? 26 : 37 }}>{n.title}</span><Plus size={17} /></button><p>Choose a question to explore.</p></div>
       <div className={`nodrag nopan ${styles.cardActions}`}>
-        {data.children > 0 && <button onClick={data.onFold} aria-expanded={data.expanded} aria-label={`${data.expanded ? 'Fold' : 'Unfold'} ${n.title}`}>{data.expanded ? <Minus size={13} /> : <Plus size={13} />}{data.expanded ? 'Fold map' : `${data.children} ideas`}</button>}
+        {data.children > 0 && <button onClick={data.onFold} aria-expanded={data.expanded} aria-label={`${data.expanded ? 'Fold' : 'Unfold'} ${n.title}`}>{data.expanded ? <Minus size={13} /> : <Plus size={13} />}{data.expanded ? 'Fold map' : `${data.children} ${data.children === 1 ? 'idea' : 'ideas'}`}</button>}
       </div>
       <div className={styles.disclosure} data-open={data.explained} inert={!data.explained} aria-hidden={!data.explained}><div><p>{n.explanation || n.summary}</p></div></div>
     </> : <>
@@ -72,7 +75,7 @@ export function CanvasNode({ data, selected }: NodeProps<FlowNode>) {
         {n.id === 'growth' && <table className={styles.comparison}><caption>Standard algorithms · worst case</caption><tbody><tr><th>Bubble</th><td>O(n²)</td></tr><tr><th>Merge</th><td>O(n log n)</td></tr><tr><th>Quick</th><td>O(n²)</td></tr></tbody></table>}
         <div className={`nodrag nopan ${styles.cardActions}`}>
           {n.explanation && <button onClick={data.onExplain} aria-expanded={data.explained} aria-label={`${data.explained ? 'Hide' : 'Explain'} ${n.title}`}>{data.explained ? <Minus size={13} /> : <Plus size={13} />}{data.explained ? 'Less' : 'Explain'}</button>}
-          {data.children > 0 && <button onClick={data.onFold} aria-expanded={data.expanded} aria-label={`${data.expanded ? 'Fold' : 'Unfold'} ${n.title}`}>{data.expanded ? <Minus size={13} /> : <Plus size={13} />}{data.expanded ? 'Fold' : `${data.children} ideas`}</button>}
+          {data.children > 0 && <button onClick={data.onFold} aria-expanded={data.expanded} aria-label={`${data.expanded ? 'Fold' : 'Unfold'} ${n.title}`}>{data.expanded ? <Minus size={13} /> : <Plus size={13} />}{data.expanded ? 'Fold' : `${data.children} ${data.children === 1 ? 'idea' : 'ideas'}`}</button>}
           {n.detailCanvasId && <button onClick={data.onEnter}>Open canvas <ArrowRight size={13} /></button>}
         </div>
         <div className={styles.disclosure} data-open={data.explained} inert={!data.explained} aria-hidden={!data.explained}><div><p>{n.explanation}</p></div></div>

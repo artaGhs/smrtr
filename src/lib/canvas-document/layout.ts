@@ -19,7 +19,7 @@ export function layoutDocument(nodes: EditorNode[], edges: CanvasSourceEdge[], o
   const span = (n: EditorNode, chain = new Set<string>()): number => {
     if (chain.has(n.id)) return size(n).height;
     const next = new Set([...chain, n.id]);
-    return Math.max(size(n).height, children(n.id).reduce((sum, child, i) => sum + span(child, next) + (i ? 66 : 0), 0));
+    return Math.max(size(n).height, children(n.id).reduce((sum, child, i) => sum + span(child, next) + (i ? 96 : 0), 0));
   };
   const place = (n: EditorNode, x: number, top: number) => {
     if (visited.has(n.id)) return;
@@ -27,7 +27,7 @@ export function layoutDocument(nodes: EditorNode[], edges: CanvasSourceEdge[], o
     const b = size(n), total = span(n);
     out[n.id] = { ...b, x, y: top + (total - b.height) / 2 };
     let childTop = top;
-    for (const child of children(n.id)) { place(child, x + b.width + 140, childTop); childTop += span(child) + 66; }
+    for (const child of children(n.id)) { place(child, x + b.width + 340, childTop); childTop += span(child) + 96; }
   };
   let top = 90;
   for (const root of roots) { place(root, 80, top); top += span(root) + 140; }
